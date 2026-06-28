@@ -7,21 +7,24 @@ import {
 import { db } from "./firebase";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, deleteDoc } from "firebase/firestore";
 
-// ---- Theme Context ----
+// ── Theme ──────────────────────────────────────────────────
 const ThemeCtx = createContext({ light: false, cls: (d) => d });
 const useTheme = () => useContext(ThemeCtx);
 
-// ---- Scoring ----
+// ── Scoring ────────────────────────────────────────────────
 const SCORING = { exactReg: 10, gdReg: 7, winner: 5, etExact: 5, etGd: 2, pensWinner: 3, pensExact: 3, champion: 15, finalists: 8 };
 
-// ---- Rounds ----
+// ── Rounds ─────────────────────────────────────────────────
 const ROUNDS = [
-  { key: "R32", name: "Round of 32" }, { key: "R16", name: "Round of 16" },
-  { key: "QF", name: "Quarterfinals" }, { key: "SF", name: "Semifinals" },
-  { key: "3RD", name: "3rd Place" }, { key: "F", name: "Final" },
+  { key: "R32", name: "Round of 32" },
+  { key: "R16", name: "Round of 16" },
+  { key: "QF", name: "Quarterfinals" },
+  { key: "SF", name: "Semifinals" },
+  { key: "3RD", name: "3rd Place" },
+  { key: "F", name: "Final" },
 ];
 
-// ---- Flags ----
+// ── Flags ──────────────────────────────────────────────────
 const FLAGS = {
   "South Africa": "🇿🇦", "Canada": "🇨🇦", "Brazil": "🇧🇷", "Japan": "🇯🇵", "Germany": "🇩🇪", "Paraguay": "🇵🇾",
   "Netherlands": "🇳🇱", "Morocco": "🇲🇦", "Ivory Coast": "🇨🇮", "Norway": "🇳🇴", "France": "🇫🇷", "Sweden": "🇸🇪",
@@ -31,7 +34,7 @@ const FLAGS = {
   "Algeria": "🇩🇿", "Colombia": "🇨🇴", "Ghana": "🇬🇭", "TBD": "⚪",
 };
 
-// ---- Team Colors ----
+// ── Team Colours ───────────────────────────────────────────
 const TEAM_COLOR = {
   "South Africa": "#007A4D", "Canada": "#FF0000", "Brazil": "#009C3B", "Japan": "#BC002D", "Germany": "#555",
   "Paraguay": "#D52B1E", "Netherlands": "#FF6600", "Morocco": "#C1272D", "Ivory Coast": "#FF8200",
@@ -42,9 +45,15 @@ const TEAM_COLOR = {
   "Egypt": "#CE1126", "Switzerland": "#FF0000", "Algeria": "#006233", "Colombia": "#FCD116", "Ghana": "#006B3F",
 };
 
-const ALL_TEAMS = ["Algeria", "Argentina", "Australia", "Austria", "Belgium", "Bosnia & Herz.", "Brazil", "Canada", "Cape Verde", "Colombia", "Croatia", "DR Congo", "Ecuador", "Egypt", "England", "France", "Germany", "Ghana", "Ivory Coast", "Japan", "Mexico", "Morocco", "Netherlands", "Norway", "Paraguay", "Portugal", "Senegal", "South Africa", "Spain", "Sweden", "Switzerland", "USA"].sort();
+// ── All Teams ──────────────────────────────────────────────
+const ALL_TEAMS = [
+  "Algeria", "Argentina", "Australia", "Austria", "Belgium", "Bosnia & Herz.", "Brazil", "Canada",
+  "Cape Verde", "Colombia", "Croatia", "DR Congo", "Ecuador", "Egypt", "England", "France", "Germany",
+  "Ghana", "Ivory Coast", "Japan", "Mexico", "Morocco", "Netherlands", "Norway", "Paraguay", "Portugal",
+  "Senegal", "South Africa", "Spain", "Sweden", "Switzerland", "USA",
+].sort();
 
-// ---- Schedule ----
+// ── Schedule ───────────────────────────────────────────────
 function buildInitialMatches() {
   const t = s => new Date(s).getTime();
   return [
@@ -83,16 +92,21 @@ function buildInitialMatches() {
   ];
 }
 
-// ---- Utils ----
+// ── Utilities ──────────────────────────────────────────────
 const isLive = m => { const n = Date.now(); return n >= m.kickoff && n <= m.kickoff + 7200000; };
+
 function scoreMatch(pred, result) {
   if (!pred || !result || result.aReg == null) return null;
-  let pts = 0; const detail = [];
-  const { aReg: pA, bReg: pB } = pred, { aReg: rA, bReg: rB } = result;
-  const exact = pA === rA && pB === rB, pD = pA - pB, rD = rA - rB;
+  let pts = 0;
+  const detail = [];
+  const pA = pred.aReg, pB = pred.bReg, rA = result.aReg, rB = result.bReg;
+  const exact = pA === rA && pB === rB;
+  const pD = pA - pB, rD = rA - rB;
   if (exact) { pts += SCORING.exactReg; detail.push(["Exact", SCORING.exactReg]); }
   else if (pD === rD) { pts += SCORING.gdReg; detail.push(["Goal diff", SCORING.gdReg]); }
-  else if ((pred.advance && pred.advance === result.advance) || (Math.sign(pD) === Math.sign(rD) && rD !== 0)) { pts += SCORING.winner; detail.push(["Advances", SCORING.winner]); }
+  else if ((pred.advance && pred.advance === result.advance) || (Math.sign(pD) === Math.sign(rD) && rD !== 0)) {
+    pts += SCORING.winner; detail.push(["Advances", SCORING.winner]);
+  }
   if (result.hadET && pred.aET != null && result.aET != null) {
     if (pred.aET === result.aET && pred.bET === result.bET) { pts += SCORING.etExact; detail.push(["ET exact", SCORING.etExact]); }
     else if ((pred.aET - pred.bET) === (result.aET - result.bET)) { pts += SCORING.etGd; detail.push(["ET diff", SCORING.etGd]); }
@@ -103,13 +117,20 @@ function scoreMatch(pred, result) {
   }
   return { pts, detail, exact };
 }
+
 function computeTotal(preds, bonus, matches, results, adj = 0) {
-  let total = 0, exacts = 0, advances = 0; const byRound = {};
-  for (const r of ROUNDS) byRound[r.key] = 0;
-  for (const m of matches) {
+  let total = 0, exacts = 0, advances = 0;
+  const byRound = {};
+  ROUNDS.forEach(r => { byRound[r.key] = 0; });
+  matches.forEach(m => {
     const s = scoreMatch(preds[m.id], results[m.id]);
-    if (s) { total += s.pts; byRound[m.round] = (byRound[m.round] || 0) + s.pts; if (s.exact) exacts++; if (s.detail.some(d => d[0].includes("Adv"))) advances++; }
-  }
+    if (s) {
+      total += s.pts;
+      byRound[m.round] = (byRound[m.round] || 0) + s.pts;
+      if (s.exact) exacts++;
+      if (s.detail.some(d => d[0].includes("Adv"))) advances++;
+    }
+  });
   if (bonus?.locked && results.__final) {
     if (results.__final.champion && bonus.champion === results.__final.champion) { total += SCORING.champion; byRound.F = (byRound.F || 0) + SCORING.champion; }
     if (results.__final.finalists && bonus.finalists?.every(f => results.__final.finalists.includes(f))) { total += SCORING.finalists; byRound.F = (byRound.F || 0) + SCORING.finalists; }
@@ -117,70 +138,127 @@ function computeTotal(preds, bonus, matches, results, adj = 0) {
   total += adj;
   return { total, exacts, advances, byRound };
 }
-const ls = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
-function genCode() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
-function useToast() { const [t, sT] = useState(""); const show = m => { sT(m); setTimeout(() => sT(""), 2500); }; return [t, show]; }
-function fmtKickoff(ts) { return new Date(ts).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Etc/GMT+5" }) + " EST"; }
 
-// ---- Confetti ----
+const ls = {
+  get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } },
+};
+
+function genCode() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
+
+function useToast() {
+  const [toast, setToast] = useState("");
+  const show = m => { setToast(m); setTimeout(() => setToast(""), 2500); };
+  return [toast, show];
+}
+
+function fmtKickoff(ts) {
+  return new Date(ts).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Etc/GMT+5" }) + " EST";
+}
+
 function Confetti() {
-  const items = useMemo(() => Array.from({ length: 28 }).map((_, i) => ({ id: i, left: Math.random() * 100, delay: Math.random() * 3, dur: 2 + Math.random() * 2, e: ["🎊", "🎉", "⭐", "🏆", "⚽", "🌟", "🥇"][Math.floor(Math.random() * 7)] })), []);
+  const items = useMemo(() => Array.from({ length: 25 }).map((_, i) => ({
+    id: i, left: Math.random() * 100, delay: Math.random() * 3,
+    dur: 2 + Math.random() * 2,
+    e: ["🎊", "🎉", "⭐", "🏆", "⚽", "🌟", "🥇"][Math.floor(Math.random() * 7)],
+  })), []);
   return (
     <>
-      <style>{`@keyframes cffall{to{transform:translateY(110vh) rotate(720deg);opacity:0;}}`}</style>
+      <style>{`@keyframes cffall { to { transform: translateY(110vh) rotate(720deg); opacity: 0; } }`}</style>
       <div className="fixed inset-0 pointer-events-none z-40 overflow-hidden">
-        {items.map(p => <div key={p.id} style={{ position: "absolute", left: `${p.left}%`, top: "-30px", fontSize: "22px", animation: `cffall ${p.dur}s linear ${p.delay}s forwards` }}>{p.e}</div>)}
+        {items.map(p => (
+          <div key={p.id} style={{ position: "absolute", left: `${p.left}%`, top: "-30px", fontSize: "22px", animation: `cffall ${p.dur}s linear ${p.delay}s forwards` }}>
+            {p.e}
+          </div>
+        ))}
       </div>
     </>
   );
 }
 
-// ============================================================
-// App Root
-// ============================================================
+// ── App Root ───────────────────────────────────────────────
 export default function App() {
   const [light, setLight] = useState(() => ls.get("wc26:light") || false);
   const [screen, setScreen] = useState("home");
-  const [name, setName] = useState(""); const [nameInput, setNameInput] = useState("");
-  const [leagues, setLeagues] = useState([]); const [active, setActive] = useState(null);
-  const [tab, setTab] = useState("matches"); const [ready, setReady] = useState(false);
+  const [name, setName] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [leagues, setLeagues] = useState([]);
+  const [active, setActive] = useState(null);
+  const [tab, setTab] = useState("matches");
+  const [ready, setReady] = useState(false);
   const [toast, showToast] = useToast();
 
-  const cls = (dark, lght = dark) => light ? lght : dark;
+  const cls = (dark, light2 = dark) => light ? light2 : dark;
   const toggleLight = () => { const n = !light; setLight(n); ls.set("wc26:light", n); };
 
-  useEffect(() => { const n = ls.get("wc26:name"), l = ls.get("wc26:leagues"); if (n) setName(n); if (l) setLeagues(l); setReady(true); }, []);
+  useEffect(() => {
+    const n = ls.get("wc26:name"), l = ls.get("wc26:leagues");
+    if (n) setName(n);
+    if (l) setLeagues(l);
+    setReady(true);
+  }, []);
+
   const saveLeagues = next => { setLeagues(next); ls.set("wc26:leagues", next); };
-  const saveName = () => { const n = nameInput.trim(); if (!n) return; setName(n); ls.set("wc26:name", n); setScreen("lobby"); };
+
+  const saveName = () => {
+    const n = nameInput.trim();
+    if (!n) return;
+    setName(n); ls.set("wc26:name", n); setScreen("lobby");
+  };
 
   const createLeague = async lname => {
-    const code = genCode(), meta = { code, name: lname, owner: name, created: Date.now() };
-    await setDoc(doc(db, "leagues", code), { ...meta, members: [{ name, joined: Date.now() }], matches: buildInitialMatches(), results: {}, comments: {}, adjustments: {} });
-    saveLeagues([...leagues, meta]); showToast(`League created! Code: ${code}`); return code;
+    const code = genCode();
+    const meta = { code, name: lname, owner: name, created: Date.now() };
+    await setDoc(doc(db, "leagues", code), {
+      ...meta, members: [{ name, joined: Date.now() }],
+      matches: buildInitialMatches(), results: {}, comments: {}, adjustments: {},
+    });
+    saveLeagues([...leagues, meta]);
+    showToast(`League created! Code: ${code}`);
+    return code;
   };
+
   const joinLeague = async raw => {
-    const code = raw.trim().toUpperCase(), snap = await getDoc(doc(db, "leagues", code));
+    const code = raw.trim().toUpperCase();
+    const snap = await getDoc(doc(db, "leagues", code));
     if (!snap.exists()) { showToast("League not found"); return false; }
     const d = snap.data();
     if (leagues.some(l => l.code === code)) { setActive(code); setScreen("league"); return true; }
     const members = d.members || [];
-    if (!members.some(m => m.name === name)) await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
-    saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]); showToast(`Joined ${d.name}!`); return true;
+    if (!members.some(m => m.name === name)) {
+      await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
+    }
+    saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
+    showToast(`Joined ${d.name}!`);
+    return true;
   };
+
   const removeLeague = async (league, me) => {
-    if (league.owner === me) { await deleteDoc(doc(db, "leagues", league.code)); }
-    else { const s = await getDoc(doc(db, "leagues", league.code)); if (s.exists()) { const mem = (s.data().members || []).filter(m => m.name !== me); await updateDoc(doc(db, "leagues", league.code), { members: mem }); } }
+    if (league.owner === me) {
+      await deleteDoc(doc(db, "leagues", league.code));
+    } else {
+      const s = await getDoc(doc(db, "leagues", league.code));
+      if (s.exists()) {
+        const members = (s.data().members || []).filter(m => m.name !== me);
+        await updateDoc(doc(db, "leagues", league.code), { members });
+      }
+    }
     saveLeagues(leagues.filter(l => l.code !== league.code));
   };
 
   if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>;
+
   return (
     <ThemeCtx.Provider value={{ light, cls }}>
       <div className={cls("min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white", "min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-100 text-slate-800")}>
-        <button onClick={toggleLight} className="fixed top-3 right-3 z-50 w-9 h-9 rounded-full bg-slate-700/80 hover:bg-slate-600 flex items-center justify-center shadow-lg backdrop-blur-sm">
+        <button onClick={toggleLight} className="fixed top-3 right-3 z-50 w-9 h-9 rounded-full bg-slate-700/80 hover:bg-slate-600 flex items-center justify-center shadow-lg">
           {light ? <Moon className="w-4 h-4 text-slate-200" /> : <Sun className="w-4 h-4 text-amber-400" />}
         </button>
-        {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold text-white">{toast}</div>}
+        {toast && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold text-white">
+            {toast}
+          </div>
+        )}
         {(!name || screen === "home") && <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} />}
         {name && screen === "lobby" && <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague} removeLeague={removeLeague} open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />}
         {name && screen === "league" && active && <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />}
@@ -189,23 +267,28 @@ export default function App() {
   );
 }
 
-// ============================================================
-// Home
-// ============================================================
+// ── Home ───────────────────────────────────────────────────
 function Home({ nameInput, setNameInput, saveName, name, go }) {
   const { cls } = useTheme();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6">
       <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 mb-4 shadow-2xl shadow-emerald-500/30"><Trophy className="w-11 h-11 text-white" /></div>
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 mb-4 shadow-2xl shadow-emerald-500/30">
+          <Trophy className="w-11 h-11 text-white" />
+        </div>
         <h1 className="text-3xl font-black tracking-tight">World Cup 2026</h1>
         <p className="text-emerald-400 font-bold text-lg">Knockout Predictor</p>
         <p className={cls("text-slate-400", "text-slate-500") + " text-sm mt-1"}>Predict every match · Beat your friends</p>
       </div>
-      {name ? (<button onClick={go} className="bg-emerald-500 hover:bg-emerald-400 transition px-8 py-3 rounded-xl font-bold flex items-center gap-2 text-white">Continue as {name}<ChevronRight className="w-4 h-4" /></button>) : (
+      {name ? (
+        <button onClick={go} className="bg-emerald-500 hover:bg-emerald-400 transition px-8 py-3 rounded-xl font-bold flex items-center gap-2 text-white">
+          Continue as {name} <ChevronRight className="w-4 h-4" />
+        </button>
+      ) : (
         <div className="w-full max-w-xs">
           <label className={cls("text-slate-300", "text-slate-600") + " text-sm mb-1.5 block"}>Your display name</label>
-          <input value={nameInput} onChange={e => setNameInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveName()} placeholder="e.g. Marco" autoFocus className={cls("bg-slate-800 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-full border rounded-xl px-4 py-3 mb-3 outline-none focus:border-emerald-500"} />
+          <input value={nameInput} onChange={e => setNameInput(e.target.value)} onKeyDown={e => e.key === "Enter" && saveName()} placeholder="e.g. Marco" autoFocus
+            className={cls("bg-slate-800 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-full border rounded-xl px-4 py-3 mb-3 outline-none focus:border-emerald-500"} />
           <button onClick={saveName} className="w-full bg-emerald-500 hover:bg-emerald-400 transition py-3 rounded-xl font-bold text-white">Get Started</button>
         </div>
       )}
@@ -213,37 +296,66 @@ function Home({ nameInput, setNameInput, saveName, name, go }) {
   );
 }
 
-// ============================================================
-// Lobby
-// ============================================================
+// ── Lobby ──────────────────────────────────────────────────
 function Lobby({ name, leagues, createLeague, joinLeague, removeLeague, open }) {
   const { cls } = useTheme();
-  const [mode, setMode] = useState(null), [lname, setLname] = useState(""), [code, setCode] = useState(""), [busy, setBusy] = useState(false), [confirm, setConfirm] = useState(null);
+  const [mode, setMode] = useState(null);
+  const [lname, setLname] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(null);
   const card = cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm");
   const inp = cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800");
+
   return (
     <div className="max-w-md mx-auto px-5 py-8">
       <div className="flex items-center justify-between mb-6">
-        <div><p className={cls("text-slate-400", "text-slate-500") + " text-sm"}>Welcome,</p><h2 className="text-2xl font-black">{name}</h2></div>
+        <div>
+          <p className={cls("text-slate-400", "text-slate-500") + " text-sm"}>Welcome,</p>
+          <h2 className="text-2xl font-black">{name}</h2>
+        </div>
         <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-lg text-white">{name[0]?.toUpperCase()}</div>
       </div>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[["create", Plus, "Create League"], ["join", LogIn, "Join League"]].map(([k, Icon, label]) => (
-          <button key={k} onClick={() => setMode(mode === k ? null : k)} className={`p-4 rounded-xl border transition flex flex-col items-center gap-2 ${mode === k ? "bg-emerald-500 border-emerald-400 text-white" : `${card} hover:border-emerald-500`}`}>
-            <Icon className="w-6 h-6" /><span className="font-bold text-sm">{label}</span>
+          <button key={k} onClick={() => setMode(mode === k ? null : k)}
+            className={`p-4 rounded-xl border transition flex flex-col items-center gap-2 ${mode === k ? "bg-emerald-500 border-emerald-400 text-white" : `${card} hover:border-emerald-500`}`}>
+            <Icon className="w-6 h-6" />
+            <span className="font-bold text-sm">{label}</span>
           </button>
         ))}
       </div>
-      {mode === "create" && <div className={`${card} border rounded-xl p-4 mb-6`}><input value={lname} onChange={e => setLname(e.target.value)} placeholder="League name" className={`w-full ${inp} border rounded-lg px-3 py-2.5 mb-3 outline-none focus:border-emerald-500`} /><button disabled={busy || !lname.trim()} onClick={async () => { setBusy(true); const c = await createLeague(lname.trim()); setBusy(false); setLname(""); setMode(null); open(c); }} className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 py-2.5 rounded-lg font-bold text-white">{busy ? "Creating…" : "Create"}</button></div>}
-      {mode === "join" && <div className={`${card} border rounded-xl p-4 mb-6`}><input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="5-letter code" maxLength={5} className={`w-full ${inp} border rounded-lg px-3 py-2.5 mb-3 font-mono tracking-widest uppercase outline-none focus:border-emerald-500`} /><button disabled={busy || !code.trim()} onClick={async () => { setBusy(true); const ok = await joinLeague(code); setBusy(false); if (ok) { setCode(""); setMode(null); open(code.trim().toUpperCase()); } }} className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 py-2.5 rounded-lg font-bold text-white">{busy ? "Joining…" : "Join"}</button></div>}
+      {mode === "create" && (
+        <div className={`${card} border rounded-xl p-4 mb-6`}>
+          <input value={lname} onChange={e => setLname(e.target.value)} placeholder="League name"
+            className={`w-full ${inp} border rounded-lg px-3 py-2.5 mb-3 outline-none focus:border-emerald-500`} />
+          <button disabled={busy || !lname.trim()} onClick={async () => { setBusy(true); const c = await createLeague(lname.trim()); setBusy(false); setLname(""); setMode(null); open(c); }}
+            className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 py-2.5 rounded-lg font-bold text-white">{busy ? "Creating…" : "Create"}</button>
+        </div>
+      )}
+      {mode === "join" && (
+        <div className={`${card} border rounded-xl p-4 mb-6`}>
+          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="5-letter code" maxLength={5}
+            className={`w-full ${inp} border rounded-lg px-3 py-2.5 mb-3 font-mono tracking-widest uppercase outline-none focus:border-emerald-500`} />
+          <button disabled={busy || !code.trim()} onClick={async () => { setBusy(true); const ok = await joinLeague(code); setBusy(false); if (ok) { setCode(""); setMode(null); open(code.trim().toUpperCase()); } }}
+            className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 py-2.5 rounded-lg font-bold text-white">{busy ? "Joining…" : "Join"}</button>
+        </div>
+      )}
       <h3 className={cls("text-slate-400", "text-slate-500") + " text-xs font-bold uppercase tracking-widest mb-3"}>Your Leagues</h3>
-      {leagues.length === 0 ? (<div className="text-center py-12 text-slate-500"><Users className="w-10 h-10 mx-auto mb-2 opacity-40" /><p className="text-sm">Create or join a league to start!</p></div>) : (
+      {leagues.length === 0 ? (
+        <div className="text-center py-12 text-slate-500"><Users className="w-10 h-10 mx-auto mb-2 opacity-40" /><p className="text-sm">Create or join a league to start!</p></div>
+      ) : (
         <div className="space-y-2">
           {leagues.map(l => (
             <div key={l.code} className={`${card} border hover:border-emerald-500 transition rounded-xl overflow-hidden`}>
               <div className="flex items-center">
-                <button onClick={() => open(l.code)} className="flex-1 p-4 text-left"><p className="font-bold">{l.name}</p><p className={cls("text-slate-400", "text-slate-500") + " text-xs font-mono mt-0.5"}>Code: {l.code} · {l.owner === name ? "Owner" : `by ${l.owner}`}</p></button>
-                <button onClick={() => setConfirm(confirm === l.code ? null : l.code)} className={cls("text-slate-500 hover:text-red-400", "text-slate-400 hover:text-red-500") + " px-4 py-4 transition text-lg"}>{confirm === l.code ? "✕" : "🗑️"}</button>
+                <button onClick={() => open(l.code)} className="flex-1 p-4 text-left">
+                  <p className="font-bold">{l.name}</p>
+                  <p className={cls("text-slate-400", "text-slate-500") + " text-xs font-mono mt-0.5"}>Code: {l.code} · {l.owner === name ? "Owner" : `by ${l.owner}`}</p>
+                </button>
+                <button onClick={() => setConfirm(confirm === l.code ? null : l.code)} className={cls("text-slate-500 hover:text-red-400", "text-slate-400 hover:text-red-500") + " px-4 py-4 transition text-lg"}>
+                  {confirm === l.code ? "✕" : "🗑️"}
+                </button>
               </div>
               {confirm === l.code && (
                 <div className={cls("border-slate-700 bg-slate-900/60", "border-slate-200 bg-slate-50") + " border-t px-4 py-3"}>
@@ -262,25 +374,31 @@ function Lobby({ name, leagues, createLeague, joinLeague, removeLeague, open }) 
   );
 }
 
-// ============================================================
-// League
-// ============================================================
+// ── League ─────────────────────────────────────────────────
 function League({ code, me, back, tab, setTab, showToast }) {
   const { cls } = useTheme();
-  const [data, setData] = useState(null), [myPreds, setMyPreds] = useState({}), [myBonus, setMyBonus] = useState(null);
-  const [allPreds, setAllPreds] = useState({}), [allBonus, setAllBonus] = useState({}), [showCelebration, setShowCelebration] = useState(false);
+  const [data, setData] = useState(null);
+  const [myPreds, setMyPreds] = useState({});
+  const [myBonus, setMyBonus] = useState(null);
+  const [allPreds, setAllPreds] = useState({});
+  const [allBonus, setAllBonus] = useState({});
+  const [showCelebration, setShowCelebration] = useState(false);
   const isOwner = data?.owner === me;
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "leagues", code), async snap => {
       if (!snap.exists()) return;
-      const d = snap.data(); setData(d);
+      const d = snap.data();
+      setData(d);
       const ap = {}, ab = {};
       for (const m of (d.members || [])) {
-        const ps = await getDoc(doc(db, "leagues", code, "predictions", m.name)); ap[m.name] = ps.exists() ? ps.data() : {};
-        const bs = await getDoc(doc(db, "leagues", code, "bonuses", m.name)); ab[m.name] = bs.exists() ? bs.data() : null;
+        const ps = await getDoc(doc(db, "leagues", code, "predictions", m.name));
+        ap[m.name] = ps.exists() ? ps.data() : {};
+        const bs = await getDoc(doc(db, "leagues", code, "bonuses", m.name));
+        ab[m.name] = bs.exists() ? bs.data() : null;
       }
-      setAllPreds(ap); setAllBonus(ab);
+      setAllPreds(ap);
+      setAllBonus(ab);
       if (d.results?.M104 && !ls.get(`wc26:celebrated:${code}`)) setShowCelebration(true);
     });
     return () => unsub();
@@ -288,42 +406,87 @@ function League({ code, me, back, tab, setTab, showToast }) {
 
   useEffect(() => {
     (async () => {
-      const ps = await getDoc(doc(db, "leagues", code, "predictions", me)); setMyPreds(ps.exists() ? ps.data() : {});
-      const bs = await getDoc(doc(db, "leagues", code, "bonuses", me)); setMyBonus(bs.exists() ? bs.data() : null);
+      const ps = await getDoc(doc(db, "leagues", code, "predictions", me));
+      setMyPreds(ps.exists() ? ps.data() : {});
+      const bs = await getDoc(doc(db, "leagues", code, "bonuses", me));
+      setMyBonus(bs.exists() ? bs.data() : null);
     })();
   }, [code, me]);
 
-  const savePred = async (mid, pred) => { const next = { ...myPreds, [mid]: pred }; setMyPreds(next); setAllPreds(p => ({ ...p, [me]: next })); await setDoc(doc(db, "leagues", code, "predictions", me), next); };
-  const saveBonusFn = async b => { setMyBonus(b); setAllBonus(p => ({ ...p, [me]: b })); await setDoc(doc(db, "leagues", code, "bonuses", me), b); };
-  const saveResult = async (mid, result) => { const results = { ...(data?.results || {}), [mid]: result }; await updateDoc(doc(db, "leagues", code), { results }); };
-  const addComment = async (mid, text) => { const comments = { ...(data?.comments || {}) }; comments[mid] = [...(comments[mid] || []), { name: me, text, ts: Date.now() }]; await updateDoc(doc(db, "leagues", code), { comments }); };
+  const savePred = async (matchId, pred) => {
+    const next = { ...myPreds, [matchId]: pred };
+    setMyPreds(next);
+    setAllPreds(p => ({ ...p, [me]: next }));
+    await setDoc(doc(db, "leagues", code, "predictions", me), next);
+  };
+
+  const saveBonusFn = async b => {
+    setMyBonus(b);
+    setAllBonus(p => ({ ...p, [me]: b }));
+    await setDoc(doc(db, "leagues", code, "bonuses", me), b);
+  };
+
+  const saveResult = async (matchId, result) => {
+    const results = { ...(data?.results || {}), [matchId]: result };
+    await updateDoc(doc(db, "leagues", code), { results });
+  };
+
+  const addComment = async (matchId, text) => {
+    const comments = { ...(data?.comments || {}) };
+    comments[matchId] = [...(comments[matchId] || []), { name: me, text, ts: Date.now() }];
+    await updateDoc(doc(db, "leagues", code), { comments });
+  };
+
+  const saveAdjustments = async adj => {
+    await updateDoc(doc(db, "leagues", code), { adjustments: adj });
+  };
+
+  const updateMatchTeams = async (matchId, tA, tB) => {
+    const matches = (data?.matches || []).map(m => m.id === matchId ? { ...m, teamA: tA, teamB: tB } : m);
+    await updateDoc(doc(db, "leagues", code), { matches });
+  };
+
   const savePredForPlayer = async (playerName, matchId, pred) => {
     const preds = { ...(allPreds[playerName] || {}), [matchId]: pred };
     await setDoc(doc(db, "leagues", code, "predictions", playerName), preds);
     setAllPreds(p => ({ ...p, [playerName]: preds }));
   };
-  const saveAdjustments = async adj => await updateDoc(doc(db, "leagues", code), { adjustments: adj });
-  const updateMatchTeams = async (mid, tA, tB) => { const matches = (data?.matches || []).map(m => m.id === mid ? { ...m, teamA: tA, teamB: tB } : m); await updateDoc(doc(db, "leagues", code), { matches }); };
 
   if (!data) return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading league…</div>;
+
   const { matches = [], results = {}, members = [], name: lname, comments = {}, adjustments = {} } = data;
 
-  if (showCelebration) return <CelebrationScreen members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} adjustments={adjustments} lname={lname} onClose={() => { ls.set(`wc26:celebrated:${code}`, true); setShowCelebration(false); }} />;
+  if (showCelebration) {
+    return <CelebrationScreen members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} adjustments={adjustments} lname={lname} onClose={() => { ls.set(`wc26:celebrated:${code}`, true); setShowCelebration(false); }} />;
+  }
 
-  const tabs = [["matches", "Matches", Calendar], ["picks", "All Picks", Eye], ["stats", "Stats", BarChart2], ["bracket", "Bracket", Trophy], ["board", "Leaderboard", Medal], ...(isOwner ? [["admin", "Admin", Edit3]] : [])];
+  const tabs = [
+    ["matches", "Matches", Calendar],
+    ["picks", "All Picks", Eye],
+    ["stats", "Stats", BarChart2],
+    ["bracket", "Bracket", Trophy],
+    ["board", "Leaderboard", Medal],
+    ...(isOwner ? [["admin", "Admin", Edit3]] : []),
+  ];
 
   return (
     <div className="max-w-md mx-auto px-4 py-5 pb-28">
       <div className="flex items-center justify-between mb-4">
-        <button onClick={back} className={cls("text-slate-400 hover:text-white", "text-slate-500 hover:text-slate-800") + " flex items-center gap-1 text-sm"}><ArrowLeft className="w-4 h-4" /> Leagues</button>
-        <button onClick={() => { navigator.clipboard?.writeText(code); showToast(`Code ${code} copied!`); }} className={cls("bg-slate-800 hover:bg-slate-700", "bg-white hover:bg-slate-100 shadow-sm") + " flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono"}><Share2 className="w-3.5 h-3.5" /> {code}</button>
+        <button onClick={back} className={cls("text-slate-400 hover:text-white", "text-slate-500 hover:text-slate-800") + " flex items-center gap-1 text-sm"}>
+          <ArrowLeft className="w-4 h-4" /> Leagues
+        </button>
+        <button onClick={() => { navigator.clipboard?.writeText(code); showToast(`Code ${code} copied!`); }}
+          className={cls("bg-slate-800 hover:bg-slate-700", "bg-white hover:bg-slate-100 shadow-sm") + " flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono"}>
+          <Share2 className="w-3.5 h-3.5" /> {code}
+        </button>
       </div>
       <h2 className="text-2xl font-black mb-1">{lname}</h2>
       <p className={cls("text-slate-400", "text-slate-500") + " text-sm mb-5"}>{members.length} player{members.length !== 1 ? "s" : ""}</p>
       <div className={cls("bg-slate-800/60", "bg-white shadow-sm") + " flex gap-1 p-1 rounded-xl mb-5"}>
         {tabs.map(([k, label, Icon]) => (
-          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition ${tab === k ? "bg-emerald-500 text-white" : cls("text-slate-400 hover:text-white", "text-slate-500 hover:text-slate-700")}`}>
-            <Icon className="w-4 h-4" />{label}
+          <button key={k} onClick={() => setTab(k)}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold flex flex-col items-center gap-1 transition ${tab === k ? "bg-emerald-500 text-white" : cls("text-slate-400 hover:text-white", "text-slate-500 hover:text-slate-700")}`}>
+            <Icon className="w-4 h-4" /> {label}
           </button>
         ))}
       </div>
@@ -337,19 +500,19 @@ function League({ code, me, back, tab, setTab, showToast }) {
   );
 }
 
-// ============================================================
-// Matches Tab
-// ============================================================
+// ── Matches Tab ────────────────────────────────────────────
 function MatchesTab({ matches, myPreds, savePred, myBonus, saveBonus, members, allPreds }) {
   const { cls } = useTheme();
   const [round, setRound] = useState("R32");
   const motd = useMemo(() => {
-    const now = Date.now(), upcoming = matches.filter(m => m.teamA !== "TBD" && m.kickoff > now);
+    const now = Date.now();
+    const upcoming = matches.filter(m => m.teamA !== "TBD" && m.kickoff > now);
     let best = null, maxV = 0;
     for (const m of upcoming) {
       const preds = members.map(mem => allPreds[mem.name]?.[m.id]).filter(Boolean);
       if (preds.length < 2) continue;
-      const aW = preds.filter(p => p.aReg > p.bReg).length, bW = preds.filter(p => p.bReg > p.aReg).length;
+      const aW = preds.filter(p => p.aReg > p.bReg).length;
+      const bW = preds.filter(p => p.bReg > p.aReg).length;
       const v = 1 - Math.max(aW, bW, preds.length - aW - bW) / preds.length;
       if (v > maxV) { maxV = v; best = m; }
     }
@@ -368,111 +531,257 @@ function MatchesTab({ matches, myPreds, savePred, myBonus, saveBonus, members, a
       )}
       <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
         {ROUNDS.map(r => (
-          <button key={r.key} onClick={() => setRound(r.key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>{r.name}</button>
+          <button key={r.key} onClick={() => setRound(r.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>
+            {r.name}
+          </button>
         ))}
       </div>
-      <div className="space-y-3">
-        {matches.filter(m => m.round === round).map(m => <MatchCard key={m.id} match={m} pred={myPreds[m.id]} savePred={savePred} />)}
+      <div className="space-y-4">
+        {matches.filter(m => m.round === round).map(m => (
+          <MatchCard key={m.id} match={m} pred={myPreds[m.id]} savePred={savePred} />
+        ))}
       </div>
     </div>
   );
 }
 
+// ── Bonus Card ─────────────────────────────────────────────
 function BonusCard({ myBonus, saveBonus }) {
   const { cls } = useTheme();
-  const [open, setOpen] = useState(false), [champ, setChamp] = useState(myBonus?.champion || ""), [f1, setF1] = useState(myBonus?.finalists?.[0] || ""), [f2, setF2] = useState(myBonus?.finalists?.[1] || "");
+  const [open, setOpen] = useState(false);
+  const [champ, setChamp] = useState(myBonus?.champion || "");
+  const [f1, setF1] = useState(myBonus?.finalists?.[0] || "");
+  const [f2, setF2] = useState(myBonus?.finalists?.[1] || "");
   const locked = !!myBonus?.locked;
   return (
     <div className="bg-gradient-to-br from-amber-900/40 to-slate-800/60 border border-amber-700/40 rounded-xl p-4 mb-5">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between">
-        <div className="flex items-center gap-2"><Crown className="w-5 h-5 text-amber-400" /><span className="font-bold text-sm">Tournament Bonuses</span>{locked && <Lock className="w-3.5 h-3.5 text-amber-500" />}</div>
+        <div className="flex items-center gap-2">
+          <Crown className="w-5 h-5 text-amber-400" />
+          <span className="font-bold text-sm">Tournament Bonuses</span>
+          {locked && <Lock className="w-3.5 h-3.5 text-amber-500" />}
+        </div>
         <ChevronRight className={`w-4 h-4 ${cls("text-slate-400", "text-slate-500")} transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
-      {locked && <div className="mt-3 text-xs space-y-1 text-amber-200/80"><p>🏆 Champion: <b>{myBonus.champion}</b> (+{SCORING.champion} pts)</p><p>🥇 Finalists: <b>{myBonus.finalists.join(" & ")}</b> (+{SCORING.finalists} pts)</p></div>}
+      {locked && (
+        <div className="mt-3 text-xs space-y-1 text-amber-200/80">
+          <p>🏆 Champion: <b>{myBonus.champion}</b> (+{SCORING.champion} pts)</p>
+          <p>🥇 Finalists: <b>{myBonus.finalists.join(" & ")}</b> (+{SCORING.finalists} pts)</p>
+        </div>
+      )}
       {open && !locked && (
         <div className="mt-3 space-y-3">
           <p className="text-xs text-amber-200/70">Pick once — locked permanently.</p>
           {[["Champion (+15 pts)", champ, setChamp], ["Finalist 1 (+8 if both correct)", f1, setF1], ["Finalist 2", f2, setF2]].map(([label, val, setter]) => (
-            <div key={label}><label className={cls("text-slate-400", "text-slate-500") + " text-xs mb-1 block"}>{label}</label>
-              <select value={val} onChange={e => setter(e.target.value)} className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-amber-500"}><option value="">Select team…</option>{ALL_TEAMS.map(t => <option key={t} value={t}>{FLAGS[t]} {t}</option>)}</select></div>
+            <div key={label}>
+              <label className={cls("text-slate-400", "text-slate-500") + " text-xs mb-1 block"}>{label}</label>
+              <select value={val} onChange={e => setter(e.target.value)} className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-full border rounded-lg px-3 py-2 text-sm outline-none"}>
+                <option value="">Select team…</option>
+                {ALL_TEAMS.map(t => <option key={t} value={t}>{FLAGS[t]} {t}</option>)}
+              </select>
+            </div>
           ))}
-          <button disabled={!champ || !f1 || !f2 || f1 === f2 || champ === f1 || champ === f2} onClick={() => saveBonus({ champion: champ, finalists: [f1, f2], locked: true })} className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-slate-700 disabled:text-slate-500 py-2 rounded-lg font-bold text-sm text-white">🔒 Lock In Bonuses</button>
+          <button disabled={!champ || !f1 || !f2 || f1 === f2 || champ === f1 || champ === f2}
+            onClick={() => saveBonus({ champion: champ, finalists: [f1, f2], locked: true })}
+            className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-slate-700 disabled:text-slate-500 py-2 rounded-lg font-bold text-sm text-white">
+            🔒 Lock In Bonuses
+          </button>
         </div>
       )}
     </div>
   );
 }
 
+// ── Match Card ─────────────────────────────────────────────
 function MatchCard({ match, pred, savePred }) {
   const { cls } = useTheme();
-  const now = Date.now(), locked = now >= match.kickoff, live = isLive(match), isTBD = match.teamA === "TBD" || match.teamB === "TBD";
-  const [aReg, setAReg] = useState(pred?.aReg ?? ""), [bReg, setBReg] = useState(pred?.bReg ?? ""), [advance, setAdvance] = useState(pred?.advance ?? "");
+  const now = Date.now();
+  const locked = now >= match.kickoff;
+  const live = isLive(match);
+  const isTBD = match.teamA === "TBD" || match.teamB === "TBD";
+
+  const [aReg, setAReg] = useState(pred?.aReg ?? "");
+  const [bReg, setBReg] = useState(pred?.bReg ?? "");
+  const [advance, setAdvance] = useState(pred?.advance ?? "");
+  const [predET, setPredET] = useState(pred?.aET != null);
+  const [aET, setAET] = useState(pred?.aET ?? "");
+  const [bET, setBET] = useState(pred?.bET ?? "");
+  const [predPens, setPredPens] = useState(pred?.pensA != null);
+  const [pensA, setPensA] = useState(pred?.pensA ?? "");
+  const [pensB, setPensB] = useState(pred?.pensB ?? "");
+
   const draw = aReg !== "" && bReg !== "" && Number(aReg) === Number(bReg);
+  const autoAdv = aReg !== "" && bReg !== "" && !draw ? (Number(aReg) > Number(bReg) ? match.teamA : match.teamB) : null;
+  const effAdv = advance || autoAdv || "";
+
   const cA = TEAM_COLOR[match.teamA], cB = TEAM_COLOR[match.teamB];
   const bgStyle = cA && cB && !isTBD ? { background: `linear-gradient(135deg,${cA}18,transparent 50%,${cB}18)` } : {};
-  const save = () => { if (aReg === "" || bReg === "") return; const p = { aReg: Number(aReg), bReg: Number(bReg) }; p.advance = draw ? (advance || match.teamA) : (Number(aReg) > Number(bReg) ? match.teamA : match.teamB); savePred(match.id, p); };
-  const timeLeft = () => { const d = match.kickoff - now; if (d <= 0) return "Locked"; const h = Math.floor(d / 3600000), days = Math.floor(h / 24); if (days > 0) return `${days}d ${h % 24}h`; return `${h}h ${Math.floor((d % 3600000) / 60000)}m`; };
+
+  const buildPred = (adv = effAdv) => {
+    const p = { aReg: Number(aReg), bReg: Number(bReg), advance: adv };
+    if (predET && aET !== "" && bET !== "") { p.aET = Number(aET); p.bET = Number(bET); }
+    if (predPens && pensA !== "" && pensB !== "") { p.pensA = Number(pensA); p.pensB = Number(pensB); }
+    return p;
+  };
+
+  const save = () => { if (aReg === "" || bReg === "") return; savePred(match.id, buildPred()); };
+  const pickAdv = t => { setAdvance(t); if (aReg !== "" && bReg !== "") savePred(match.id, buildPred(t)); };
+
+  const timeLeft = () => {
+    const d = match.kickoff - now;
+    if (d <= 0) return "Locked";
+    const h = Math.floor(d / 3600000), days = Math.floor(h / 24);
+    if (days > 0) return `${days}d ${h % 24}h`;
+    return `${h}h ${Math.floor((d % 3600000) / 60000)}m`;
+  };
+
+  const ScoreInput = ({ val, set }) => (
+    <input type="text" inputMode="numeric" disabled={locked || isTBD} value={val}
+      onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save}
+      className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40"} />
+  );
+
+  const SmallInput = ({ val, set }) => (
+    <input type="text" inputMode="numeric" disabled={locked} value={val}
+      onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save}
+      className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"} />
+  );
 
   return (
-    <div className={cls("border-slate-700", "border-slate-200 shadow-sm") + " border rounded-xl p-4 overflow-hidden"} style={bgStyle}>
-      <div className="flex justify-between items-start mb-3">
+    <div className={cls("border-slate-700", "border-slate-200 shadow-sm") + " border rounded-xl overflow-hidden"} style={bgStyle}>
+
+      {/* Header */}
+      <div className="flex justify-between items-start px-4 pt-3 pb-1">
         <div>
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-bold text-emerald-400">{match.id}</span>
-            {live && <span className="flex items-center gap-0.5 text-[10px] text-red-400 font-bold animate-pulse"><Zap className="w-2.5 h-2.5" />LIVE</span>}
+            {live && <span className="text-[10px] text-red-400 font-bold animate-pulse flex items-center gap-0.5"><Zap className="w-2.5 h-2.5" />LIVE</span>}
           </div>
-          <div className={cls("text-slate-500", "text-slate-400") + " flex items-center gap-1 text-[11px] mt-0.5"}><MapPin className="w-3 h-3" />{match.venue}</div>
+          <div className={cls("text-slate-500", "text-slate-400") + " flex items-center gap-1 text-[11px]"}><MapPin className="w-3 h-3" />{match.venue}</div>
         </div>
         <div className="text-right">
-          <span className={`text-[11px] flex items-center gap-1 justify-end ${live ? "text-red-400 animate-pulse" : locked ? "text-red-400/70" : "text-emerald-400"}`}>
+          <span className={`text-[11px] flex items-center gap-1 ${live ? "text-red-400 animate-pulse" : locked ? "text-red-400/70" : "text-emerald-400"}`}>
             {live ? <><Zap className="w-3 h-3" />In Progress</> : locked ? <><Lock className="w-3 h-3" />Locked</> : <><Clock className="w-3 h-3" />{timeLeft()}</>}
           </span>
           <p className={cls("text-slate-500", "text-slate-400") + " text-[10px] mt-0.5"}>{fmtKickoff(match.kickoff)}</p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+
+      {/* Score */}
+      <div className="flex items-center gap-2 px-4 py-3">
         <div className="flex-1 text-right"><span className="font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span></div>
-        <input type="text" inputMode="numeric" pattern="[0-9]*" disabled={locked || isTBD} value={aReg} onChange={e => setAReg(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-12 h-12 text-center border rounded-lg font-bold text-lg outline-none focus:border-emerald-500 disabled:opacity-30"} />
+        <ScoreInput val={aReg} set={setAReg} />
         <span className={cls("text-slate-500", "text-slate-400") + " font-bold text-lg"}>–</span>
-        <input type="text" inputMode="numeric" pattern="[0-9]*" disabled={locked || isTBD} value={bReg} onChange={e => setBReg(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-12 h-12 text-center border rounded-lg font-bold text-lg outline-none focus:border-emerald-500 disabled:opacity-30"} />
+        <ScoreInput val={bReg} set={setBReg} />
         <div className="flex-1"><span className="font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span></div>
       </div>
-      {draw && !locked && !isTBD && (
-        <div className={cls("border-slate-700", "border-slate-200") + " mt-3 pt-3 border-t"}>
-          <p className={cls("text-slate-400", "text-slate-500") + " text-xs mb-2"}>Draw — who advances (ET / pens)?</p>
-          <div className="grid grid-cols-2 gap-2">
-            {[match.teamA, match.teamB].map(t => (
-              <button key={t} onClick={() => { setAdvance(t); savePred(match.id, { aReg: Number(aReg), bReg: Number(bReg), advance: t }); }} className={`py-2 rounded-lg text-xs font-bold transition ${advance === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>{FLAGS[t]} {t}</button>
-            ))}
+
+      {/* Prediction sections — always shown for non-TBD */}
+      {!isTBD && (
+        <div className={cls("border-slate-700/60", "border-slate-200") + " border-t"}>
+
+          {/* Who advances */}
+          <div className="px-4 py-3">
+            <p className={cls("text-slate-400", "text-slate-500") + " text-xs font-semibold mb-2"}>Who advances?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button disabled={locked} onClick={() => pickAdv(match.teamA)}
+                className={`py-2.5 rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${effAdv === match.teamA ? "bg-emerald-500 text-white" : cls("border-slate-700 bg-slate-900/60 text-slate-300", "border-slate-200 bg-slate-50 text-slate-700") + " border"}`}>
+                {FLAGS[match.teamA]} {match.teamA}
+              </button>
+              <button disabled={locked} onClick={() => pickAdv(match.teamB)}
+                className={`py-2.5 rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${effAdv === match.teamB ? "bg-emerald-500 text-white" : cls("border-slate-700 bg-slate-900/60 text-slate-300", "border-slate-200 bg-slate-50 text-slate-700") + " border"}`}>
+                {FLAGS[match.teamB]} {match.teamB}
+              </button>
+            </div>
           </div>
+
+          {/* Extra Time */}
+          <div className={cls("border-slate-700/60", "border-slate-200") + " border-t px-4 py-3"}>
+            <label className={`flex items-center gap-2 text-xs mb-2 ${locked ? "opacity-50" : "cursor-pointer"}`}>
+              <input type="checkbox" disabled={locked} checked={predET}
+                onChange={e => { setPredET(e.target.checked); if (!e.target.checked) { setAET(""); setBET(""); } }} />
+              <span className={cls("text-slate-300", "text-slate-700") + " font-medium"}>Predict Extra Time score</span>
+              <span className="ml-auto text-emerald-400 font-bold text-[10px]">+5 exact · +2 diff</span>
+            </label>
+            {predET && (
+              <div className="flex items-center gap-2 pl-5">
+                <SmallInput val={aET} set={setAET} />
+                <span className={cls("text-slate-500", "text-slate-400")}>–</span>
+                <SmallInput val={bET} set={setBET} />
+                <span className={cls("text-slate-500", "text-slate-400") + " text-[10px]"}>cumulative after ET</span>
+              </div>
+            )}
+          </div>
+
+          {/* Penalties */}
+          <div className={cls("border-slate-700/60", "border-slate-200") + " border-t px-4 py-3"}>
+            <label className={`flex items-center gap-2 text-xs mb-2 ${locked ? "opacity-50" : "cursor-pointer"}`}>
+              <input type="checkbox" disabled={locked} checked={predPens}
+                onChange={e => { setPredPens(e.target.checked); if (!e.target.checked) { setPensA(""); setPensB(""); } }} />
+              <span className={cls("text-slate-300", "text-slate-700") + " font-medium"}>Predict Penalty shootout</span>
+              <span className="ml-auto text-emerald-400 font-bold text-[10px]">+3 winner · +3 exact</span>
+            </label>
+            {predPens && (
+              <div className="flex items-center gap-2 pl-5">
+                <SmallInput val={pensA} set={setPensA} />
+                <span className={cls("text-slate-500", "text-slate-400")}>–</span>
+                <SmallInput val={pensB} set={setPensB} />
+                <span className={cls("text-slate-500", "text-slate-400") + " text-[10px]"}>shootout score</span>
+              </div>
+            )}
+          </div>
+
         </div>
       )}
-      {pred && !isTBD && <p className="mt-2 text-[11px] text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />{pred.aReg}–{pred.bReg}{draw && pred.advance ? ` · ${pred.advance} advances` : ""}</p>}
-      {isTBD && <p className={cls("text-slate-500", "text-slate-400") + " mt-2 text-[11px]"}>Teams confirmed after group stage</p>}
+
+      {/* Summary */}
+      <div className="px-4 pb-3 pt-1">
+        {pred && !isTBD && (
+          <p className="text-[11px] text-emerald-400 flex items-center gap-1 flex-wrap">
+            <Check className="w-3 h-3 shrink-0" />
+            {pred.aReg}–{pred.bReg}
+            {pred.advance ? ` · ${pred.advance} adv.` : ""}
+            {pred.aET != null ? ` · ET ${pred.aET}–${pred.bET}` : ""}
+            {pred.pensA != null ? ` · Pens ${pred.pensA}–${pred.pensB}` : ""}
+          </p>
+        )}
+        {isTBD && <p className={cls("text-slate-500", "text-slate-400") + " text-[11px]"}>Teams TBD after group stage</p>}
+      </div>
+
     </div>
   );
 }
 
-// ============================================================
-// All Picks Tab
-// ============================================================
+// ── All Picks Tab ──────────────────────────────────────────
 function PicksTab({ matches, results, members, allPreds, comments, addComment, me }) {
   const { cls } = useTheme();
-  const [round, setRound] = useState("R32"), [commentInputs, setCommentInputs] = useState({}), [showC, setShowC] = useState({});
+  const [round, setRound] = useState("R32");
+  const [commentInputs, setCommentInputs] = useState({});
+  const [showC, setShowC] = useState({});
 
   return (
     <div>
       <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
-        {ROUNDS.map(r => <button key={r.key} onClick={() => setRound(r.key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>{r.name}</button>)}
+        {ROUNDS.map(r => (
+          <button key={r.key} onClick={() => setRound(r.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>
+            {r.name}
+          </button>
+        ))}
       </div>
       <div className="space-y-4">
         {matches.filter(m => m.round === round).map(m => {
-          const res = results[m.id], isTBD = m.teamA === "TBD" || m.teamB === "TBD", mc = comments[m.id] || [];
+          const res = results[m.id];
+          const isTBD = m.teamA === "TBD" || m.teamB === "TBD";
+          const mc = comments[m.id] || [];
           const preds = members.map(mem => allPreds[mem.name]?.[m.id]).filter(Boolean);
-          const aV = preds.filter(p => p.aReg > p.bReg).length, bV = preds.filter(p => p.bReg > p.aReg).length, dV = preds.filter(p => p.aReg === p.bReg).length;
-          const total = preds.length;
+          const aV = preds.filter(p => p.aReg > p.bReg).length;
+          const bV = preds.filter(p => p.bReg > p.aReg).length;
+          const dV = preds.filter(p => p.aReg === p.bReg).length;
           return (
             <div key={m.id} className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl overflow-hidden"}>
+              {/* Match header */}
               <div className={cls("bg-slate-900/60 border-slate-700", "bg-slate-50 border-slate-200") + " p-3 border-b"}>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] font-bold text-emerald-400">{m.id}</span>
@@ -480,14 +789,22 @@ function PicksTab({ matches, results, members, allPreds, comments, addComment, m
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-bold text-sm flex-1">{FLAGS[m.teamA]} {m.teamA}</span>
-                  <span className={`font-mono font-bold text-sm px-2 py-0.5 rounded ${res ? "bg-emerald-500/20 text-emerald-300" : cls("text-slate-500", "text-slate-400")}`}>{res ? `${res.aReg}–${res.bReg}` : "vs"}</span>
+                  <span className={`font-mono font-bold text-sm px-2 py-0.5 rounded ${res ? "bg-emerald-500/20 text-emerald-300" : cls("text-slate-500", "text-slate-400")}`}>
+                    {res ? `${res.aReg}–${res.bReg}` : "vs"}
+                  </span>
                   <span className="font-bold text-sm flex-1 text-right">{m.teamB} {FLAGS[m.teamB]}</span>
                 </div>
-                {res?.advance && <p className="text-[11px] text-emerald-400 text-center mt-1.5">✅ {FLAGS[res.advance]} {res.advance} advances{res.hadPens ? ` (pens ${res.pensA}–${res.pensB})` : res.hadET ? " (ET)" : ""}</p>}
-                {total > 0 && !isTBD && (
+                {res?.advance && (
+                  <p className="text-[11px] text-emerald-400 text-center mt-1.5">
+                    ✅ {FLAGS[res.advance]} {res.advance} advances{res.hadPens ? ` (pens ${res.pensA}–${res.pensB})` : res.hadET ? " (ET)" : ""}
+                  </p>
+                )}
+                {preds.length > 0 && !isTBD && (
                   <div className="mt-2">
                     <div className={cls("text-slate-500", "text-slate-400") + " flex text-[10px] justify-between mb-0.5"}>
-                      <span>{m.teamA.split(" ")[0]} {aV}</span><span>Draw {dV}</span><span>{bV} {m.teamB.split(" ")[0]}</span>
+                      <span>{m.teamA.split(" ")[0]} {aV}</span>
+                      <span>Draw {dV}</span>
+                      <span>{bV} {m.teamB.split(" ")[0]}</span>
                     </div>
                     <div className="flex h-1.5 rounded-full overflow-hidden gap-px">
                       {aV > 0 && <div className="bg-blue-500 rounded-full" style={{ flex: aV }} />}
@@ -497,9 +814,12 @@ function PicksTab({ matches, results, members, allPreds, comments, addComment, m
                   </div>
                 )}
               </div>
+              {/* Predictions */}
               <div className={cls("divide-slate-700/30", "divide-slate-100") + " divide-y"}>
                 {members.map(member => {
-                  const pred = allPreds[member.name]?.[m.id], score = (res && pred) ? scoreMatch(pred, res) : null, isDraw = pred && pred.aReg === pred.bReg;
+                  const pred = allPreds[member.name]?.[m.id];
+                  const score = res && pred ? scoreMatch(pred, res) : null;
+                  const isDraw = pred && pred.aReg === pred.bReg;
                   return (
                     <div key={member.name} className="flex items-center px-3 py-2.5 gap-3">
                       <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold text-emerald-400 shrink-0">{member.name[0]?.toUpperCase()}</div>
@@ -507,17 +827,32 @@ function PicksTab({ matches, results, members, allPreds, comments, addComment, m
                       {pred ? (
                         <div className="flex items-center gap-1.5">
                           {score?.exact && <span title="Called it!">🔮</span>}
-                          <span className={cls("text-slate-300", "text-slate-600") + " text-sm font-mono"}>{pred.aReg}–{pred.bReg}{isDraw && pred.advance ? <span className={cls("text-slate-400", "text-slate-400") + " text-[10px] ml-1"}>({FLAGS[pred.advance]})</span> : null}</span>
-                          {score != null ? (<span className={`text-xs font-black px-2 py-0.5 rounded-full min-w-[40px] text-center ${score.pts >= SCORING.exactReg ? "bg-amber-500/30 text-amber-300" : score.pts > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700/50 text-slate-500"}`}>+{score.pts}</span>) : (<span className={cls("text-slate-600", "text-slate-400") + " text-[11px] italic min-w-[40px] text-right"}>—</span>)}
+                          <span className={cls("text-slate-300", "text-slate-600") + " text-sm font-mono"}>
+                            {pred.aReg}–{pred.bReg}
+                            {isDraw && pred.advance ? <span className={cls("text-slate-400", "text-slate-400") + " text-[10px] ml-1"}>({FLAGS[pred.advance]})</span> : null}
+                          </span>
+                          {score != null ? (
+                            <span className={`text-xs font-black px-2 py-0.5 rounded-full min-w-[40px] text-center ${score.pts >= SCORING.exactReg ? "bg-amber-500/30 text-amber-300" : score.pts > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700/50 text-slate-500"}`}>
+                              +{score.pts}
+                            </span>
+                          ) : (
+                            <span className={cls("text-slate-600", "text-slate-400") + " text-[11px] italic min-w-[40px] text-right"}>—</span>
+                          )}
                         </div>
-                      ) : (<span className={cls("text-slate-600", "text-slate-400") + " text-[11px] italic"}>no pick</span>)}
+                      ) : (
+                        <span className={cls("text-slate-600", "text-slate-400") + " text-[11px] italic"}>no pick</span>
+                      )}
                     </div>
                   );
                 })}
               </div>
+              {/* Comments */}
               <div className={cls("border-slate-700/50", "border-slate-100") + " border-t"}>
-                <button onClick={() => setShowC(s => ({ ...s, [m.id]: !s[m.id] }))} className={cls("text-slate-500 hover:text-slate-300", "text-slate-400 hover:text-slate-600") + " flex items-center gap-1.5 px-3 py-2 text-xs font-medium w-full"}>
-                  <MessageCircle className="w-3.5 h-3.5" />{mc.length > 0 ? `${mc.length} comment${mc.length !== 1 ? "s" : ""}` : "Add comment"}<ChevronRight className={`w-3 h-3 ml-auto transition-transform ${showC[m.id] ? "rotate-90" : ""}`} />
+                <button onClick={() => setShowC(s => ({ ...s, [m.id]: !s[m.id] }))}
+                  className={cls("text-slate-500 hover:text-slate-300", "text-slate-400 hover:text-slate-600") + " flex items-center gap-1.5 px-3 py-2 text-xs font-medium w-full"}>
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  {mc.length > 0 ? `${mc.length} comment${mc.length !== 1 ? "s" : ""}` : "Add comment"}
+                  <ChevronRight className={`w-3 h-3 ml-auto transition-transform ${showC[m.id] ? "rotate-90" : ""}`} />
                 </button>
                 {showC[m.id] && (
                   <div className="px-3 pb-3 space-y-2">
@@ -525,12 +860,17 @@ function PicksTab({ matches, results, members, allPreds, comments, addComment, m
                       <div key={i} className={cls("bg-slate-900/60", "bg-slate-50") + " rounded-lg px-3 py-2"}>
                         <span className="text-xs font-bold text-emerald-400">{c.name}</span>
                         <span className={cls("text-slate-300", "text-slate-600") + " text-xs ml-2"}>{c.text}</span>
-                        <span className={cls("text-slate-600", "text-slate-400") + " text-[10px] ml-1"}>{new Date(c.ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
                       </div>
                     ))}
                     <div className="flex gap-2 mt-2">
-                      <input value={commentInputs[m.id] || ""} onChange={e => setCommentInputs(s => ({ ...s, [m.id]: e.target.value }))} onKeyDown={e => { if (e.key === "Enter" && commentInputs[m.id]?.trim()) { addComment(m.id, commentInputs[m.id].trim()); setCommentInputs(s => ({ ...s, [m.id]: "" })); } }} placeholder="Say something…" maxLength={120} className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " flex-1 border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-emerald-500"} />
-                      <button onClick={() => { if (commentInputs[m.id]?.trim()) { addComment(m.id, commentInputs[m.id].trim()); setCommentInputs(s => ({ ...s, [m.id]: "" })); } }} className="bg-emerald-500 hover:bg-emerald-400 p-2 rounded-lg"><Send className="w-3.5 h-3.5 text-white" /></button>
+                      <input value={commentInputs[m.id] || ""} onChange={e => setCommentInputs(s => ({ ...s, [m.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === "Enter" && commentInputs[m.id]?.trim()) { addComment(m.id, commentInputs[m.id].trim()); setCommentInputs(s => ({ ...s, [m.id]: "" })); } }}
+                        placeholder="Say something…" maxLength={120}
+                        className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " flex-1 border rounded-lg px-3 py-1.5 text-xs outline-none focus:border-emerald-500"} />
+                      <button onClick={() => { if (commentInputs[m.id]?.trim()) { addComment(m.id, commentInputs[m.id].trim()); setCommentInputs(s => ({ ...s, [m.id]: "" })); } }}
+                        className="bg-emerald-500 hover:bg-emerald-400 p-2 rounded-lg">
+                        <Send className="w-3.5 h-3.5 text-white" />
+                      </button>
                     </div>
                   </div>
                 )}
@@ -543,32 +883,46 @@ function PicksTab({ matches, results, members, allPreds, comments, addComment, m
   );
 }
 
-// ============================================================
-// Stats Tab
-// ============================================================
+// ── Stats Tab ──────────────────────────────────────────────
 function StatsTab({ me, members, allPreds, allBonus, matches, results, adjustments }) {
   const { cls } = useTheme();
   const [view, setView] = useState("me");
+
   function playerStats(name) {
     const preds = allPreds[name] || {}, bonus = allBonus[name];
     const { total, byRound, exacts } = computeTotal(preds, bonus, matches, results, adjustments[name] || 0);
     const played = matches.filter(m => results[m.id] && preds[m.id]);
     const accuracy = played.length > 0 ? Math.round(played.filter(m => { const s = scoreMatch(preds[m.id], results[m.id]); return s && s.pts > 0; }).length / played.length * 100) : 0;
-    const total_preds = Object.keys(preds).length;
     const pickCounts = {};
-    for (const m of matches) { const p = preds[m.id]; if (!p) continue; const w = p.aReg > p.bReg ? m.teamA : p.bReg > p.aReg ? m.teamB : p.advance; if (w && w !== "TBD") pickCounts[w] = (pickCounts[w] || 0) + 1; }
+    matches.forEach(m => {
+      const p = preds[m.id];
+      if (!p) return;
+      const w = p.aReg > p.bReg ? m.teamA : p.bReg > p.aReg ? m.teamB : p.advance;
+      if (w && w !== "TBD") pickCounts[w] = (pickCounts[w] || 0) + 1;
+    });
     const favTeam = Object.entries(pickCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    return { total, byRound, exacts, accuracy, total_preds, favTeam };
+    return { total, byRound, exacts, accuracy, total_preds: Object.keys(preds).length, favTeam };
   }
+
   const myStats = playerStats(me);
   const allStats = members.map(m => ({ name: m.name, ...playerStats(m.name) })).sort((a, b) => b.total - a.total);
-  const SC = ({ label, value, sub }) => (<div className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-3 text-center"}><p className="text-xl font-black text-emerald-400">{value}</p><p className={cls("text-slate-300", "text-slate-700") + " text-xs font-bold mt-0.5"}>{label}</p>{sub && <p className={cls("text-slate-500", "text-slate-400") + " text-[10px] mt-0.5"}>{sub}</p>}</div>);
+
+  const SC = ({ label, value, sub }) => (
+    <div className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-3 text-center"}>
+      <p className="text-xl font-black text-emerald-400">{value}</p>
+      <p className={cls("text-slate-300", "text-slate-700") + " text-xs font-bold mt-0.5"}>{label}</p>
+      {sub && <p className={cls("text-slate-500", "text-slate-400") + " text-[10px] mt-0.5"}>{sub}</p>}
+    </div>
+  );
 
   return (
     <div>
       <div className="flex gap-2 mb-4">
         {[["me", "My Stats"], ["all", "All Players"]].map(([k, l]) => (
-          <button key={k} onClick={() => setView(k)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${view === k ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>{l}</button>
+          <button key={k} onClick={() => setView(k)}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${view === k ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>
+            {l}
+          </button>
         ))}
       </div>
       {view === "me" && (
@@ -582,17 +936,24 @@ function StatsTab({ me, members, allPreds, allBonus, matches, results, adjustmen
           {myStats.favTeam && (
             <div className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-3 flex items-center gap-3"}>
               <span className="text-2xl">{FLAGS[myStats.favTeam]}</span>
-              <div><p className={cls("text-slate-400", "text-slate-500") + " text-[11px]"}>Favourite pick</p><p className="font-bold text-sm">{myStats.favTeam}</p></div>
+              <div>
+                <p className={cls("text-slate-400", "text-slate-500") + " text-[11px]"}>Favourite pick</p>
+                <p className="font-bold text-sm">{myStats.favTeam}</p>
+              </div>
             </div>
           )}
           <div className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-4"}>
             <p className="font-bold text-sm mb-3 flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-emerald-400" /> Points by Round</p>
             <div className="space-y-2">
               {ROUNDS.map(r => {
-                const pts = myStats.byRound[r.key] || 0, max = Math.max(...Object.values(myStats.byRound), 1); return (
+                const pts = myStats.byRound[r.key] || 0;
+                const max = Math.max(...Object.values(myStats.byRound), 1);
+                return (
                   <div key={r.key} className="flex items-center gap-2">
                     <span className={cls("text-slate-400", "text-slate-500") + " text-[11px] w-24 shrink-0"}>{r.name}</span>
-                    <div className={cls("bg-slate-700", "bg-slate-100") + " flex-1 h-2 rounded-full overflow-hidden"}><div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pts / max * 100}%` }} /></div>
+                    <div className={cls("bg-slate-700", "bg-slate-100") + " flex-1 h-2 rounded-full overflow-hidden"}>
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pts / max * 100}%` }} />
+                    </div>
                     <span className="text-xs font-bold text-emerald-400 w-6 text-right">{pts}</span>
                   </div>
                 );
@@ -604,7 +965,7 @@ function StatsTab({ me, members, allPreds, allBonus, matches, results, adjustmen
       {view === "all" && (
         <div className="space-y-2">
           {allStats.map((s, i) => (
-            <div key={s.name} className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + (s.name === me ? " border-emerald-500/50" : "") + ` border rounded-xl p-3`}>
+            <div key={s.name} className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + (s.name === me ? " border-emerald-500/50" : "") + " border rounded-xl p-3"}>
               <div className="flex items-center gap-3 mb-1.5">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${i === 0 ? "bg-amber-400 text-slate-900" : i === 1 ? "bg-slate-300 text-slate-900" : i === 2 ? "bg-amber-700 text-white" : "bg-slate-700 text-white"}`}>{i + 1}</div>
                 <span className="font-bold text-sm flex-1">{s.name}{s.name === me && <span className="ml-1 text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded text-white">You</span>}</span>
@@ -623,9 +984,7 @@ function StatsTab({ me, members, allPreds, allBonus, matches, results, adjustmen
   );
 }
 
-// ============================================================
-// Bracket Tab
-// ============================================================
+// ── Bracket Tab ────────────────────────────────────────────
 function BracketTab({ matches, results }) {
   const { cls } = useTheme();
   return (
@@ -635,7 +994,8 @@ function BracketTab({ matches, results }) {
           <h3 className={cls("text-slate-400", "text-slate-500") + " text-xs font-bold uppercase tracking-widest mb-2"}>{r.name}</h3>
           <div className="space-y-2">
             {matches.filter(m => m.round === r.key).map(m => {
-              const res = results[m.id]; return (
+              const res = results[m.id];
+              return (
                 <div key={m.id} className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-lg p-2.5"}>
                   <div className="flex items-center text-sm">
                     <span className="text-[10px] text-emerald-400 font-bold w-10 shrink-0">{m.id}</span>
@@ -654,14 +1014,16 @@ function BracketTab({ matches, results }) {
   );
 }
 
-// ============================================================
-// Leaderboard
-// ============================================================
+// ── Leaderboard ────────────────────────────────────────────
 function Leaderboard({ members, allPreds, allBonus, matches, results, me, adjustments }) {
   const { cls } = useTheme();
   const [expanded, setExpanded] = useState(null);
-  const rows = members.map(m => { const { total, exacts, advances, byRound } = computeTotal(allPreds[m.name] || {}, allBonus[m.name], matches, results, adjustments[m.name] || 0); return { name: m.name, total, exacts, advances, byRound }; }).sort((a, b) => b.total - a.total || b.exacts - a.exacts || b.advances - a.advances);
+  const rows = members.map(m => {
+    const { total, exacts, advances, byRound } = computeTotal(allPreds[m.name] || {}, allBonus[m.name], matches, results, adjustments[m.name] || 0);
+    return { name: m.name, total, exacts, advances, byRound };
+  }).sort((a, b) => b.total - a.total || b.exacts - a.exacts || b.advances - a.advances);
   const medals = ["bg-amber-400 text-slate-900", "bg-slate-300 text-slate-900", "bg-amber-700 text-white"];
+
   return (
     <div>
       <div className="space-y-2 mb-6">
@@ -671,10 +1033,14 @@ function Leaderboard({ members, allPreds, allBonus, matches, results, me, adjust
               <div className="flex items-center gap-3 p-3 cursor-pointer" onClick={() => setExpanded(expanded === r.name ? null : r.name)}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${medals[i] || "bg-slate-700 text-white"}`}>{i + 1}</div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm flex items-center gap-1.5 flex-wrap">{r.name}{r.name === me && <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded font-bold text-white">You</span>}{i === 0 && rows[0].total > 0 && <Crown className="w-3.5 h-3.5 text-amber-400" />}</p>
+                  <p className="font-bold text-sm flex items-center gap-1.5 flex-wrap">
+                    {r.name}
+                    {r.name === me && <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded font-bold text-white">You</span>}
+                    {i === 0 && rows[0].total > 0 && <Crown className="w-3.5 h-3.5 text-amber-400" />}
+                  </p>
                   <p className={cls("text-slate-400", "text-slate-500") + " text-[11px]"}>{r.exacts} exact · {r.advances} advances</p>
                 </div>
-                <div className="text-right shrink-0 flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <p className="font-black text-xl text-emerald-400">{r.total}</p>
                   <ChevronRight className={cls("text-slate-500", "text-slate-400") + ` w-4 h-4 transition-transform ${expanded === r.name ? "rotate-90" : ""}`} />
                 </div>
@@ -690,7 +1056,6 @@ function Leaderboard({ members, allPreds, allBonus, matches, results, me, adjust
                       </div>
                     ))}
                   </div>
-                  {adjustments[r.name] && adjustments[r.name] !== 0 && <p className={cls("text-slate-400", "text-slate-500") + " text-[11px] mt-2"}>Adjustment: {adjustments[r.name] > 0 ? "+" : ""}{adjustments[r.name]} pts</p>}
                 </div>
               )}
             </div>
@@ -708,17 +1073,18 @@ function Leaderboard({ members, allPreds, allBonus, matches, results, me, adjust
   );
 }
 
-// ============================================================
-// Admin Tab
-// ============================================================
+// ── Admin Tab ──────────────────────────────────────────────
 function AdminTab({ matches, results, saveResult, members, adjustments, saveAdjustments, updateMatchTeams, allPreds, savePredForPlayer }) {
   const { cls } = useTheme();
   const [section, setSection] = useState("results");
   return (
     <div>
-      <div className={cls("bg-slate-800/60", "bg-white shadow-sm") + " flex gap-1 p-1 rounded-xl mb-4"}>
+      <div className={cls("bg-slate-800/60", "bg-white shadow-sm") + " flex gap-1 p-1 rounded-xl mb-4 overflow-x-auto"}>
         {[["results", "Results"], ["teams", "TBD Teams"], ["picks", "Player Picks"], ["final", "Bonuses"], ["adjust", "Adjustments"]].map(([k, l]) => (
-          <button key={k} onClick={() => setSection(k)} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition ${section === k ? "bg-emerald-500 text-white" : cls("text-slate-400", "text-slate-500")}`}>{l}</button>
+          <button key={k} onClick={() => setSection(k)}
+            className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition whitespace-nowrap px-2 ${section === k ? "bg-emerald-500 text-white" : cls("text-slate-400", "text-slate-500")}`}>
+            {l}
+          </button>
         ))}
       </div>
       {section === "results" && <ResultsSection matches={matches} results={results} saveResult={saveResult} />}
@@ -726,6 +1092,68 @@ function AdminTab({ matches, results, saveResult, members, adjustments, saveAdju
       {section === "picks" && <AdminPicksSection matches={matches} members={members} allPreds={allPreds} savePredForPlayer={savePredForPlayer} />}
       {section === "final" && <FinalBonusSection results={results} saveResult={saveResult} />}
       {section === "adjust" && <AdjustmentsSection members={members} adjustments={adjustments} saveAdjustments={saveAdjustments} />}
+    </div>
+  );
+}
+
+function ResultsSection({ matches, results, saveResult }) {
+  const { cls } = useTheme();
+  const [round, setRound] = useState("R32");
+  const rm = matches.filter(m => m.round === round && m.teamA !== "TBD");
+  return (
+    <div>
+      <p className={cls("text-amber-200/70 border-amber-700/30 bg-slate-800/60", "text-amber-700 border-amber-200 bg-amber-50") + " text-xs mb-3 flex items-center gap-1.5 border rounded-lg p-2.5"}>
+        <Lock className="w-3.5 h-3.5 shrink-0" /> Enter results to auto-score all players.
+      </p>
+      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
+        {ROUNDS.map(r => (
+          <button key={r.key} onClick={() => setRound(r.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>
+            {r.name}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-3">
+        {rm.length === 0 && <p className={cls("text-slate-500", "text-slate-400") + " text-sm text-center py-8"}>No confirmed teams yet.</p>}
+        {rm.map(m => <ResultRow key={m.id} match={m} result={results[m.id]} saveResult={saveResult} />)}
+      </div>
+    </div>
+  );
+}
+
+function TBDTeamsSection({ matches, updateMatchTeams }) {
+  const { cls } = useTheme();
+  const tbdMatches = matches.filter(m => m.teamA === "TBD" || m.teamB === "TBD");
+  const [edits, setEdits] = useState({});
+  const [saved, setSaved] = useState({});
+  if (tbdMatches.length === 0) return <p className="text-emerald-400 text-sm text-center py-8">✅ All teams confirmed!</p>;
+  return (
+    <div className="space-y-3">
+      {tbdMatches.map(m => {
+        const e = edits[m.id] || { teamA: m.teamA === "TBD" ? "" : m.teamA, teamB: m.teamB === "TBD" ? "" : m.teamB };
+        return (
+          <div key={m.id} className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-3"}>
+            <div className="flex justify-between mb-2">
+              <span className="text-xs font-bold text-emerald-400">{m.id}</span>
+              <span className={cls("text-slate-500", "text-slate-400") + " text-[10px]"}>{m.venue}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {["teamA", "teamB"].map(side => (
+                <select key={side} value={e[side]} onChange={ev => setEdits(s => ({ ...s, [m.id]: { ...e, [side]: ev.target.value } }))}
+                  className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-500"}>
+                  <option value="">Select team…</option>
+                  {ALL_TEAMS.map(t => <option key={t} value={t}>{FLAGS[t]} {t}</option>)}
+                </select>
+              ))}
+            </div>
+            <button disabled={!e.teamA || !e.teamB || e.teamA === e.teamB}
+              onClick={async () => { await updateMatchTeams(m.id, e.teamA, e.teamB); setSaved(s => ({ ...s, [m.id]: true })); setTimeout(() => setSaved(s => ({ ...s, [m.id]: false })), 2000); }}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-1.5 rounded-lg text-xs font-bold text-white">
+              {saved[m.id] ? "✅ Saved!" : "Confirm Teams"}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -741,24 +1169,29 @@ function AdminPicksSection({ matches, members, allPreds, savePredForPlayer }) {
     <div>
       <div className={cls("border-amber-700/30 bg-amber-900/20", "border-amber-200 bg-amber-50") + " border rounded-lg p-2.5 mb-4 text-xs"}>
         <p className="text-amber-400 font-bold mb-0.5">⚠️ Admin Override</p>
-        <p className={cls("text-amber-200/70", "text-amber-700")}>You can add or override predictions for any player on any match — including locked ones. Use this for players who missed submitting.</p>
+        <p className={cls("text-amber-200/70", "text-amber-700")}>Add or override predictions for any player on any match — including locked ones.</p>
       </div>
       <div className="mb-4">
         <label className={cls("text-slate-400", "text-slate-500") + " text-xs mb-1 block"}>Select player:</label>
-        <select value={player} onChange={e => setPlayer(e.target.value)} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500"}>
+        <select value={player} onChange={e => setPlayer(e.target.value)} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-full border rounded-lg px-3 py-2 text-sm outline-none"}>
           {members.map(m => <option key={m.name} value={m.name}>{m.name} ({Object.keys(allPreds[m.name] || {}).length} picks)</option>)}
         </select>
       </div>
       <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
-        {ROUNDS.map(r => <button key={r.key} onClick={() => setRound(r.key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>{r.name}</button>)}
+        {ROUNDS.map(r => (
+          <button key={r.key} onClick={() => setRound(r.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>
+            {r.name}
+          </button>
+        ))}
       </div>
-      {roundMatches.length === 0 && <p className={cls("text-slate-500", "text-slate-400") + " text-sm text-center py-6"}>No confirmed teams yet.</p>}
       {roundMatches.length > 0 && (
         <div className="mb-3 flex items-center gap-2">
           <span className={cls("text-slate-400", "text-slate-500") + " text-xs"}>{missing.length} missing · {roundMatches.length - missing.length} submitted</span>
           {missing.length === 0 && <span className="text-emerald-400 text-xs font-bold">✅ All done!</span>}
         </div>
       )}
+      {roundMatches.length === 0 && <p className={cls("text-slate-500", "text-slate-400") + " text-sm text-center py-6"}>No confirmed teams yet.</p>}
       <div className="space-y-3">
         {roundMatches.map(m => (
           <AdminPickRow key={m.id} match={m} existingPred={preds[m.id]} onSave={pred => savePredForPlayer(player, m.id, pred)} />
@@ -770,112 +1203,82 @@ function AdminPicksSection({ matches, members, allPreds, savePredForPlayer }) {
 
 function AdminPickRow({ match, existingPred, onSave }) {
   const { cls } = useTheme();
-  const now = Date.now(), isMatchLocked = now >= match.kickoff;
-  const [aReg, setAReg] = useState(existingPred?.aReg ?? ""), [bReg, setBReg] = useState(existingPred?.bReg ?? "");
+  const now = Date.now();
+  const isLocked = now >= match.kickoff;
+  const [aReg, setAReg] = useState(existingPred?.aReg ?? "");
+  const [bReg, setBReg] = useState(existingPred?.bReg ?? "");
   const [advance, setAdvance] = useState(existingPred?.advance ?? "");
-  const [predET, setPredET] = useState(existingPred?.aET != null), [aET, setAET] = useState(existingPred?.aET ?? ""), [bET, setBET] = useState(existingPred?.bET ?? "");
-  const [predPens, setPredPens] = useState(existingPred?.pensA != null), [pensA, setPensA] = useState(existingPred?.pensA ?? ""), [pensB, setPensB] = useState(existingPred?.pensB ?? "");
+  const [predET, setPredET] = useState(existingPred?.aET != null);
+  const [aET, setAET] = useState(existingPred?.aET ?? "");
+  const [bET, setBET] = useState(existingPred?.bET ?? "");
+  const [predPens, setPredPens] = useState(existingPred?.pensA != null);
+  const [pensA, setPensA] = useState(existingPred?.pensA ?? "");
+  const [pensB, setPensB] = useState(existingPred?.pensB ?? "");
   const [saved, setSaved] = useState(false);
+
   const draw = aReg !== "" && bReg !== "" && Number(aReg) === Number(bReg);
   const autoAdv = aReg !== "" && bReg !== "" && !draw ? (Number(aReg) > Number(bReg) ? match.teamA : match.teamB) : null;
-  const effectiveAdv = advance || (autoAdv || "");
+  const effAdv = advance || autoAdv || "";
 
   const save = async () => {
     if (aReg === "" || bReg === "") return;
-    const p = { aReg: Number(aReg), bReg: Number(bReg), advance: effectiveAdv };
+    const p = { aReg: Number(aReg), bReg: Number(bReg), advance: effAdv };
     if (predET && aET !== "" && bET !== "") { p.aET = Number(aET); p.bET = Number(bET); }
     if (predPens && pensA !== "" && pensB !== "") { p.pensA = Number(pensA); p.pensB = Number(pensB); }
-    await onSave(p); setSaved(true); setTimeout(() => setSaved(false), 2000);
+    await onSave(p);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
-  const ni = (val, set) => <input type="text" inputMode="numeric" pattern="[0-9]*" value={val} onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-11 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500"} />;
+
+  const NI = ({ val, set }) => (
+    <input type="text" inputMode="numeric" value={val} onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))}
+      className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-11 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500"} />
+  );
 
   return (
-    <div className={cls("border-slate-700", "border-slate-200 shadow-sm") + (existingPred ? " border-emerald-500/40" : " border-amber-500/30") + ` border rounded-xl p-3`}>
+    <div className={cls("border-slate-700", "border-slate-200 shadow-sm") + (existingPred ? " border-emerald-500/40" : " border-amber-500/30") + " border rounded-xl p-3"}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-emerald-400">{match.id} · {match.venue}</span>
-          {isMatchLocked && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">🔒 Locked</span>}
+          {isLocked && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">🔒 Locked</span>}
         </div>
         {existingPred ? <span className="text-[10px] text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />Has pick</span> : <span className="text-[10px] text-amber-400 font-bold">⚠ No pick</span>}
       </div>
-
-      {/* Score */}
       <div className="flex items-center gap-2 mb-3">
         <span className="flex-1 text-right text-xs font-bold">{FLAGS[match.teamA]} {match.teamA}</span>
-        {ni(aReg, setAReg)}<span className={cls("text-slate-500", "text-slate-400") + " font-bold"}>–</span>{ni(bReg, setBReg)}
+        <NI val={aReg} set={setAReg} />
+        <span className={cls("text-slate-500", "text-slate-400") + " font-bold"}>–</span>
+        <NI val={bReg} set={setBReg} />
         <span className="flex-1 text-xs font-bold">{match.teamB} {FLAGS[match.teamB]}</span>
       </div>
-
-      {/* Who advances */}
       <div className="grid grid-cols-2 gap-1.5 mb-3">
         {[match.teamA, match.teamB].map(t => (
-          <button key={t} onClick={() => setAdvance(t)} className={`py-1.5 rounded-lg text-xs font-bold transition ${effectiveAdv === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>{FLAGS[t]} {t}</button>
+          <button key={t} onClick={() => setAdvance(t)}
+            className={`py-1.5 rounded-lg text-xs font-bold transition ${effAdv === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>
+            {FLAGS[t]} {t}
+          </button>
         ))}
       </div>
-
-      {/* ET */}
       <div className={cls("border-slate-700/50", "border-slate-200") + " border-t pt-2 mb-2"}>
         <label className="flex items-center gap-2 text-xs cursor-pointer mb-1.5">
           <input type="checkbox" checked={predET} onChange={e => { setPredET(e.target.checked); if (!e.target.checked) { setAET(""); setBET(""); } }} />
           <span className={cls("text-slate-400", "text-slate-500")}>ET score</span>
           <span className="text-emerald-400 text-[10px] ml-auto">+5/+2</span>
         </label>
-        {predET && <div className="flex items-center gap-2 pl-5">{ni(aET, setAET)}<span className={cls("text-slate-500", "text-slate-400")}>–</span>{ni(bET, setBET)}</div>}
+        {predET && <div className="flex items-center gap-2 pl-5"><NI val={aET} set={setAET} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={bET} set={setBET} /></div>}
       </div>
-
-      {/* Pens */}
       <div className={cls("border-slate-700/50", "border-slate-200") + " border-t pt-2 mb-3"}>
         <label className="flex items-center gap-2 text-xs cursor-pointer mb-1.5">
           <input type="checkbox" checked={predPens} onChange={e => { setPredPens(e.target.checked); if (!e.target.checked) { setPensA(""); setPensB(""); } }} />
           <span className={cls("text-slate-400", "text-slate-500")}>Penalty shootout</span>
           <span className="text-emerald-400 text-[10px] ml-auto">+3/+3</span>
         </label>
-        {predPens && <div className="flex items-center gap-2 pl-5">{ni(pensA, setPensA)}<span className={cls("text-slate-500", "text-slate-400")}>–</span>{ni(pensB, setPensB)}</div>}
+        {predPens && <div className="flex items-center gap-2 pl-5"><NI val={pensA} set={setPensA} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={pensB} set={setPensB} /></div>}
       </div>
-
-      <button onClick={save} disabled={aReg === "" || bReg === ""} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-1.5 rounded-lg text-xs font-bold text-white">
+      <button onClick={save} disabled={aReg === "" || bReg === ""}
+        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-1.5 rounded-lg text-xs font-bold text-white">
         {saved ? "✅ Saved!" : existingPred ? "Update Pick" : "Save Pick"}
       </button>
-    </div>
-  );
-}
-
-
-const { cls } = useTheme();
-const [round, setRound] = useState("R32");
-const rm = matches.filter(m => m.round === round && m.teamA !== "TBD");
-return (
-  <div>
-    <p className={cls("text-amber-200/70 border-amber-700/30 bg-slate-800/60", "text-amber-700 border-amber-200 bg-amber-50") + " text-xs mb-3 flex items-center gap-1.5 border rounded-lg p-2.5"}><Lock className="w-3.5 h-3.5 shrink-0" /> Enter results to auto-score all players.</p>
-    <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">{ROUNDS.map(r => <button key={r.key} onClick={() => setRound(r.key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>{r.name}</button>)}</div>
-    <div className="space-y-3">{rm.length === 0 && <p className={cls("text-slate-500", "text-slate-400") + " text-sm text-center py-8"}>No confirmed teams yet.</p>}{rm.map(m => <ResultRow key={m.id} match={m} result={results[m.id]} saveResult={saveResult} />)}</div>
-  </div>
-);
-}
-
-function TBDTeamsSection({ matches, updateMatchTeams }) {
-  const { cls } = useTheme();
-  const tbdMatches = matches.filter(m => m.teamA === "TBD" || m.teamB === "TBD");
-  const [edits, setEdits] = useState({}), [saved, setSaved] = useState({});
-  if (tbdMatches.length === 0) return <p className="text-emerald-400 text-sm text-center py-8">✅ All teams confirmed!</p>;
-  return (
-    <div className="space-y-3">
-      {tbdMatches.map(m => {
-        const e = edits[m.id] || { teamA: m.teamA === "TBD" ? "" : m.teamA, teamB: m.teamB === "TBD" ? "" : m.teamB };
-        return (
-          <div key={m.id} className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-3"}>
-            <div className="flex justify-between mb-2"><span className="text-xs font-bold text-emerald-400">{m.id}</span><span className={cls("text-slate-500", "text-slate-400") + " text-[10px]"}>{m.venue}</span></div>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              {["teamA", "teamB"].map(side => (
-                <select key={side} value={e[side]} onChange={ev => setEdits(s => ({ ...s, [m.id]: { ...e, [side]: ev.target.value } }))} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-500"}>
-                  <option value="">Select team…</option>{ALL_TEAMS.map(t => <option key={t} value={t}>{FLAGS[t]} {t}</option>)}
-                </select>
-              ))}
-            </div>
-            <button disabled={!e.teamA || !e.teamB || e.teamA === e.teamB} onClick={async () => { await updateMatchTeams(m.id, e.teamA, e.teamB); setSaved(s => ({ ...s, [m.id]: true })); setTimeout(() => setSaved(s => ({ ...s, [m.id]: false })), 2000); }} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-1.5 rounded-lg text-xs font-bold text-white">{saved[m.id] ? "✅ Saved!" : "Confirm Teams"}</button>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -883,23 +1286,36 @@ function TBDTeamsSection({ matches, updateMatchTeams }) {
 function FinalBonusSection({ results, saveResult }) {
   const { cls } = useTheme();
   const cur = results.__final || {};
-  const [champ, setChamp] = useState(cur.champion || ""), [f1, setF1] = useState(cur.finalists?.[0] || ""), [f2, setF2] = useState(cur.finalists?.[1] || ""), [saved, setSaved] = useState(false);
+  const [champ, setChamp] = useState(cur.champion || "");
+  const [f1, setF1] = useState(cur.finalists?.[0] || "");
+  const [f2, setF2] = useState(cur.finalists?.[1] || "");
+  const [saved, setSaved] = useState(false);
   return (
     <div className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-4 space-y-3"}>
       <p className="font-bold text-sm flex items-center gap-2"><Crown className="w-4 h-4 text-amber-400" /> Enter Tournament Winners</p>
-      <p className={cls("text-slate-400", "text-slate-500") + " text-xs"}>After the Final, enter results here to trigger all bonus point calculations.</p>
+      <p className={cls("text-slate-400", "text-slate-500") + " text-xs"}>After the Final, enter results here to trigger all bonus scoring.</p>
       {[["🏆 Champion (+15 pts)", champ, setChamp], ["🥈 Finalist 1 (+8 pts for both)", f1, setF1], ["🥉 Finalist 2", f2, setF2]].map(([label, val, setter]) => (
-        <div key={label}><label className={cls("text-slate-400", "text-slate-500") + " text-xs mb-1 block"}>{label}</label>
-          <select value={val} onChange={e => setter(e.target.value)} className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-full border rounded-lg px-3 py-2 text-sm outline-none"}><option value="">Select…</option>{ALL_TEAMS.map(t => <option key={t} value={t}>{FLAGS[t]} {t}</option>)}</select></div>
+        <div key={label}>
+          <label className={cls("text-slate-400", "text-slate-500") + " text-xs mb-1 block"}>{label}</label>
+          <select value={val} onChange={e => setter(e.target.value)} className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-full border rounded-lg px-3 py-2 text-sm outline-none"}>
+            <option value="">Select…</option>
+            {ALL_TEAMS.map(t => <option key={t} value={t}>{FLAGS[t]} {t}</option>)}
+          </select>
+        </div>
       ))}
-      <button disabled={!champ || !f1 || !f2} onClick={async () => { await saveResult("__final", { champion: champ, finalists: [f1, f2] }); setSaved(true); setTimeout(() => setSaved(false), 2000); }} className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 py-2 rounded-lg font-bold text-sm text-white">{saved ? "✅ Saved & Scored!" : "Save & Score Bonuses"}</button>
+      <button disabled={!champ || !f1 || !f2}
+        onClick={async () => { await saveResult("__final", { champion: champ, finalists: [f1, f2] }); setSaved(true); setTimeout(() => setSaved(false), 2000); }}
+        className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 py-2 rounded-lg font-bold text-sm text-white">
+        {saved ? "✅ Saved & Scored!" : "Save & Score Bonuses"}
+      </button>
     </div>
   );
 }
 
 function AdjustmentsSection({ members, adjustments, saveAdjustments }) {
   const { cls } = useTheme();
-  const [local, setLocal] = useState(adjustments || {}), [saved, setSaved] = useState(false);
+  const [local, setLocal] = useState(adjustments || {});
+  const [saved, setSaved] = useState(false);
   return (
     <div className="space-y-3">
       <p className={cls("text-slate-400", "text-slate-500") + " text-xs"}>Add or subtract points from any player. Use for corrections or disputes.</p>
@@ -907,43 +1323,80 @@ function AdjustmentsSection({ members, adjustments, saveAdjustments }) {
         <div key={m.name} className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-3 flex items-center gap-3"}>
           <div className="w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold text-emerald-400 shrink-0">{m.name[0]?.toUpperCase()}</div>
           <span className="flex-1 text-sm font-medium">{m.name}</span>
-          <input type="text" inputMode="numeric" value={local[m.name] || ""} onChange={e => { const v = e.target.value.replace(/[^-0-9]/g, ""); setLocal(s => ({ ...s, [m.name]: v ? Number(v) : 0 })); }} placeholder="0" className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-20 text-center border rounded-lg px-2 py-1.5 text-sm outline-none focus:border-emerald-500"} />
+          <input type="text" value={local[m.name] || ""} onChange={e => { const v = e.target.value.replace(/[^-0-9]/g, ""); setLocal(s => ({ ...s, [m.name]: v ? Number(v) : 0 })); }} placeholder="0"
+            className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-20 text-center border rounded-lg px-2 py-1.5 text-sm outline-none"} />
           <span className={cls("text-slate-500", "text-slate-400") + " text-xs"}>pts</span>
         </div>
       ))}
-      <button onClick={async () => { await saveAdjustments(local); setSaved(true); setTimeout(() => setSaved(false), 2000); }} className="w-full bg-emerald-600 hover:bg-emerald-500 py-2 rounded-lg font-bold text-sm text-white">{saved ? "✅ Saved!" : "Save Adjustments"}</button>
+      <button onClick={async () => { await saveAdjustments(local); setSaved(true); setTimeout(() => setSaved(false), 2000); }}
+        className="w-full bg-emerald-600 hover:bg-emerald-500 py-2 rounded-lg font-bold text-sm text-white">
+        {saved ? "✅ Saved!" : "Save Adjustments"}
+      </button>
     </div>
   );
 }
 
+// ── Result Row ─────────────────────────────────────────────
 function ResultRow({ match, result, saveResult }) {
   const { cls } = useTheme();
-  const [aReg, setAReg] = useState(result?.aReg ?? ""), [bReg, setBReg] = useState(result?.bReg ?? ""), [hadET, setHadET] = useState(result?.hadET ?? false), [aET, setAET] = useState(result?.aET ?? ""), [bET, setBET] = useState(result?.bET ?? ""), [hadPens, setHadPens] = useState(result?.hadPens ?? false), [pensA, setPensA] = useState(result?.pensA ?? ""), [pensB, setPensB] = useState(result?.pensB ?? ""), [advance, setAdvance] = useState(result?.advance ?? "");
-  const save = () => { if (aReg === "" || bReg === "" || !advance) return; saveResult(match.id, { aReg: Number(aReg), bReg: Number(bReg), hadET, aET: hadET ? Number(aET) : null, bET: hadET ? Number(bET) : null, hadPens, pensA: hadPens ? Number(pensA) : null, pensB: hadPens ? Number(pensB) : null, advance }); };
-  const ni = (val, set) => <input type="text" inputMode="numeric" pattern="[0-9]*" value={val} onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-11 h-10 text-center border rounded-lg font-bold outline-none focus:border-emerald-500"} />;
+  const [aReg, setAReg] = useState(result?.aReg ?? "");
+  const [bReg, setBReg] = useState(result?.bReg ?? "");
+  const [hadET, setHadET] = useState(result?.hadET ?? false);
+  const [aET, setAET] = useState(result?.aET ?? "");
+  const [bET, setBET] = useState(result?.bET ?? "");
+  const [hadPens, setHadPens] = useState(result?.hadPens ?? false);
+  const [pensA, setPensA] = useState(result?.pensA ?? "");
+  const [pensB, setPensB] = useState(result?.pensB ?? "");
+  const [advance, setAdvance] = useState(result?.advance ?? "");
+
+  const save = () => {
+    if (aReg === "" || bReg === "" || !advance) return;
+    saveResult(match.id, { aReg: Number(aReg), bReg: Number(bReg), hadET, aET: hadET ? Number(aET) : null, bET: hadET ? Number(bET) : null, hadPens, pensA: hadPens ? Number(pensA) : null, pensB: hadPens ? Number(pensB) : null, advance });
+  };
+
+  const NI = ({ val, set }) => (
+    <input type="text" inputMode="numeric" value={val} onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))}
+      className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-11 h-10 text-center border rounded-lg font-bold outline-none focus:border-emerald-500"} />
+  );
+
   return (
     <div className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-3"}>
       <p className="text-[11px] text-emerald-400 font-bold mb-2">{match.id} · {match.venue}</p>
-      <div className="flex items-center gap-2 mb-3"><span className="flex-1 text-right font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span>{ni(aReg, setAReg)}<span className={cls("text-slate-500", "text-slate-400") + " font-bold"}>–</span>{ni(bReg, setBReg)}<span className="flex-1 font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span></div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="flex-1 text-right font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span>
+        <NI val={aReg} set={setAReg} />
+        <span className={cls("text-slate-500", "text-slate-400") + " font-bold"}>–</span>
+        <NI val={bReg} set={setBReg} />
+        <span className="flex-1 font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span>
+      </div>
       <div className="flex gap-4 mb-3 text-xs">
         <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={hadET} onChange={e => setHadET(e.target.checked)} /> Extra time</label>
         <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={hadPens} onChange={e => setHadPens(e.target.checked)} /> Penalties</label>
       </div>
-      {hadET && <div className="flex items-center gap-2 mb-3 text-xs"><span className={cls("text-slate-400", "text-slate-500") + " w-16"}>ET score:</span>{ni(aET, setAET)}<span className={cls("text-slate-500", "text-slate-400")}>–</span>{ni(bET, setBET)}</div>}
-      {hadPens && <div className="flex items-center gap-2 mb-3 text-xs"><span className={cls("text-slate-400", "text-slate-500") + " w-16"}>Pens:</span>{ni(pensA, setPensA)}<span className={cls("text-slate-500", "text-slate-400")}>–</span>{ni(pensB, setPensB)}</div>}
-      <div className="grid grid-cols-2 gap-2 mb-3">{[match.teamA, match.teamB].map(t => <button key={t} onClick={() => setAdvance(t)} className={`py-2 rounded-lg text-xs font-bold transition ${advance === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>{FLAGS[t]} {t} advances</button>)}</div>
-      <button onClick={save} disabled={aReg === "" || bReg === "" || !advance} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-2 rounded-lg font-bold text-sm text-white">Save Result</button>
+      {hadET && <div className="flex items-center gap-2 mb-3 text-xs"><span className={cls("text-slate-400", "text-slate-500") + " w-16"}>ET score:</span><NI val={aET} set={setAET} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={bET} set={setBET} /></div>}
+      {hadPens && <div className="flex items-center gap-2 mb-3 text-xs"><span className={cls("text-slate-400", "text-slate-500") + " w-16"}>Pens:</span><NI val={pensA} set={setPensA} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={pensB} set={setPensB} /></div>}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {[match.teamA, match.teamB].map(t => (
+          <button key={t} onClick={() => setAdvance(t)}
+            className={`py-2 rounded-lg text-xs font-bold transition ${advance === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>
+            {FLAGS[t]} {t} advances
+          </button>
+        ))}
+      </div>
+      <button onClick={save} disabled={aReg === "" || bReg === "" || !advance}
+        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-2 rounded-lg font-bold text-sm text-white">Save Result</button>
       {result && <p className="text-[11px] text-emerald-400 mt-2 flex items-center gap-1"><Check className="w-3 h-3" /> Saved</p>}
     </div>
   );
 }
 
-// ============================================================
-// Celebration Screen
-// ============================================================
+// ── Celebration ────────────────────────────────────────────
 function CelebrationScreen({ members, allPreds, allBonus, matches, results, adjustments, lname, onClose }) {
   const finalRes = results.M104;
-  const rows = members.map(m => { const { total, exacts } = computeTotal(allPreds[m.name] || {}, allBonus[m.name], matches, results, adjustments[m.name] || 0); return { name: m.name, total, exacts }; }).sort((a, b) => b.total - a.total || b.exacts - a.exacts);
+  const rows = members.map(m => {
+    const { total, exacts } = computeTotal(allPreds[m.name] || {}, allBonus[m.name], matches, results, adjustments[m.name] || 0);
+    return { name: m.name, total, exacts };
+  }).sort((a, b) => b.total - a.total || b.exacts - a.exacts);
   const winner = rows[0];
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white flex flex-col items-center justify-center px-6 relative overflow-hidden">
@@ -952,10 +1405,29 @@ function CelebrationScreen({ members, allPreds, allBonus, matches, results, adju
         <div className="text-6xl mb-4 animate-bounce">🏆</div>
         <h1 className="text-3xl font-black mb-1">{lname}</h1>
         <p className="text-emerald-400 font-bold mb-6">Final Standings</p>
-        {finalRes && <div className="bg-emerald-500/20 border border-emerald-500/40 rounded-xl p-4 mb-4"><p className="text-sm text-emerald-300">⚽ World Cup 2026 Winner</p><p className="text-2xl font-black mt-1">{FLAGS[finalRes.advance]} {finalRes.advance}</p></div>}
-        {winner && <div className="bg-amber-500/20 border border-amber-500/40 rounded-xl p-4 mb-4"><p className="text-sm text-amber-300">👑 Prediction Champion</p><p className="text-2xl font-black mt-1">{winner.name}</p><p className="text-emerald-400 font-bold">{winner.total} pts · {winner.exacts} exact scores</p></div>}
-        <div className="space-y-2 mb-6">{rows.map((r, i) => <div key={r.name} className="flex items-center gap-3 bg-slate-800/60 border border-slate-700 rounded-xl p-3"><span className="text-lg">{["🥇", "🥈", "🥉"][i] || `${i + 1}.`}</span><span className="flex-1 font-bold">{r.name}</span><span className="font-black text-emerald-400">{r.total} pts</span></div>)}</div>
-        <button onClick={onClose} className="w-full bg-emerald-500 hover:bg-emerald-400 py-3 rounded-xl font-bold transition">Back to League</button>
+        {finalRes && (
+          <div className="bg-emerald-500/20 border border-emerald-500/40 rounded-xl p-4 mb-4">
+            <p className="text-sm text-emerald-300">⚽ World Cup 2026 Winner</p>
+            <p className="text-2xl font-black mt-1">{FLAGS[finalRes.advance]} {finalRes.advance}</p>
+          </div>
+        )}
+        {winner && (
+          <div className="bg-amber-500/20 border border-amber-500/40 rounded-xl p-4 mb-4">
+            <p className="text-sm text-amber-300">👑 Prediction Champion</p>
+            <p className="text-2xl font-black mt-1">{winner.name}</p>
+            <p className="text-emerald-400 font-bold">{winner.total} pts · {winner.exacts} exact scores</p>
+          </div>
+        )}
+        <div className="space-y-2 mb-6">
+          {rows.map((r, i) => (
+            <div key={r.name} className="flex items-center gap-3 bg-slate-800/60 border border-slate-700 rounded-xl p-3">
+              <span className="text-lg">{["🥇", "🥈", "🥉"][i] || `${i + 1}.`}</span>
+              <span className="flex-1 font-bold">{r.name}</span>
+              <span className="font-black text-emerald-400">{r.total} pts</span>
+            </div>
+          ))}
+        </div>
+        <button onClick={onClose} className="w-full bg-emerald-500 hover:bg-emerald-400 py-3 rounded-xl font-bold transition text-white">Back to League</button>
       </div>
     </div>
   );
