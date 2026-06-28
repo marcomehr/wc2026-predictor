@@ -297,6 +297,11 @@ function League({ code, me, back, tab, setTab, showToast }) {
   const saveBonusFn = async b => { setMyBonus(b); setAllBonus(p => ({ ...p, [me]: b })); await setDoc(doc(db, "leagues", code, "bonuses", me), b); };
   const saveResult = async (mid, result) => { const results = { ...(data?.results || {}), [mid]: result }; await updateDoc(doc(db, "leagues", code), { results }); };
   const addComment = async (mid, text) => { const comments = { ...(data?.comments || {}) }; comments[mid] = [...(comments[mid] || []), { name: me, text, ts: Date.now() }]; await updateDoc(doc(db, "leagues", code), { comments }); };
+  const savePredForPlayer = async (playerName, matchId, pred) => {
+    const preds = { ...(allPreds[playerName] || {}), [matchId]: pred };
+    await setDoc(doc(db, "leagues", code, "predictions", playerName), preds);
+    setAllPreds(p => ({ ...p, [playerName]: preds }));
+  };
   const saveAdjustments = async adj => await updateDoc(doc(db, "leagues", code), { adjustments: adj });
   const updateMatchTeams = async (mid, tA, tB) => { const matches = (data?.matches || []).map(m => m.id === mid ? { ...m, teamA: tA, teamB: tB } : m); await updateDoc(doc(db, "leagues", code), { matches }); };
 
@@ -327,7 +332,7 @@ function League({ code, me, back, tab, setTab, showToast }) {
       {tab === "stats" && <StatsTab me={me} members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} adjustments={adjustments} />}
       {tab === "bracket" && <BracketTab matches={matches} results={results} />}
       {tab === "board" && <Leaderboard members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} me={me} adjustments={adjustments} />}
-      {tab === "admin" && isOwner && <AdminTab matches={matches} results={results} saveResult={saveResult} members={members} adjustments={adjustments} saveAdjustments={saveAdjustments} updateMatchTeams={updateMatchTeams} />}
+      {tab === "admin" && isOwner && <AdminTab matches={matches} results={results} saveResult={saveResult} members={members} adjustments={adjustments} saveAdjustments={saveAdjustments} updateMatchTeams={updateMatchTeams} allPreds={allPreds} savePredForPlayer={savePredForPlayer} />}
     </div>
   );
 }
@@ -706,35 +711,103 @@ function Leaderboard({ members, allPreds, allBonus, matches, results, me, adjust
 // ============================================================
 // Admin Tab
 // ============================================================
-function AdminTab({ matches, results, saveResult, members, adjustments, saveAdjustments, updateMatchTeams }) {
+function AdminTab({ matches, results, saveResult, members, adjustments, saveAdjustments, updateMatchTeams, allPreds, savePredForPlayer }) {
   const { cls } = useTheme();
   const [section, setSection] = useState("results");
   return (
     <div>
       <div className={cls("bg-slate-800/60", "bg-white shadow-sm") + " flex gap-1 p-1 rounded-xl mb-4"}>
-        {[["results", "Results"], ["teams", "TBD Teams"], ["final", "Bonuses"], ["adjust", "Adjustments"]].map(([k, l]) => (
+        {[["results", "Results"], ["teams", "TBD Teams"], ["picks", "Player Picks"], ["final", "Bonuses"], ["adjust", "Adjustments"]].map(([k, l]) => (
           <button key={k} onClick={() => setSection(k)} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition ${section === k ? "bg-emerald-500 text-white" : cls("text-slate-400", "text-slate-500")}`}>{l}</button>
         ))}
       </div>
       {section === "results" && <ResultsSection matches={matches} results={results} saveResult={saveResult} />}
       {section === "teams" && <TBDTeamsSection matches={matches} updateMatchTeams={updateMatchTeams} />}
+      {section === "picks" && <AdminPicksSection matches={matches} members={members} allPreds={allPreds} savePredForPlayer={savePredForPlayer} />}
       {section === "final" && <FinalBonusSection results={results} saveResult={saveResult} />}
       {section === "adjust" && <AdjustmentsSection members={members} adjustments={adjustments} saveAdjustments={saveAdjustments} />}
     </div>
   );
 }
 
-function ResultsSection({ matches, results, saveResult }) {
+function AdminPicksSection({ matches, members, allPreds, savePredForPlayer }) {
   const { cls } = useTheme();
+  const [player, setPlayer] = useState(members[0]?.name || "");
   const [round, setRound] = useState("R32");
-  const rm = matches.filter(m => m.round === round && m.teamA !== "TBD");
+  const preds = allPreds[player] || {};
+  const roundMatches = matches.filter(m => m.round === round && m.teamA !== "TBD");
+  const missing = roundMatches.filter(m => !preds[m.id]);
   return (
     <div>
-      <p className={cls("text-amber-200/70 border-amber-700/30 bg-slate-800/60", "text-amber-700 border-amber-200 bg-amber-50") + " text-xs mb-3 flex items-center gap-1.5 border rounded-lg p-2.5"}><Lock className="w-3.5 h-3.5 shrink-0" /> Enter results to auto-score all players.</p>
-      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">{ROUNDS.map(r => <button key={r.key} onClick={() => setRound(r.key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>{r.name}</button>)}</div>
-      <div className="space-y-3">{rm.length === 0 && <p className={cls("text-slate-500", "text-slate-400") + " text-sm text-center py-8"}>No confirmed teams yet.</p>}{rm.map(m => <ResultRow key={m.id} match={m} result={results[m.id]} saveResult={saveResult} />)}</div>
+      <p className={cls("text-slate-400", "text-slate-500") + " text-xs mb-3"}>Enter or override predictions on behalf of players who missed the deadline.</p>
+      <div className="mb-4">
+        <label className={cls("text-slate-400", "text-slate-500") + " text-xs mb-1 block"}>Select player:</label>
+        <select value={player} onChange={e => setPlayer(e.target.value)} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500"}>
+          {members.map(m => <option key={m.name} value={m.name}>{m.name} ({Object.keys(allPreds[m.name] || {}).length} picks)</option>)}
+        </select>
+      </div>
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+        {ROUNDS.map(r => <button key={r.key} onClick={() => setRound(r.key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>{r.name}</button>)}
+      </div>
+      {roundMatches.length === 0 && <p className={cls("text-slate-500", "text-slate-400") + " text-sm text-center py-6"}>No confirmed teams yet.</p>}
+      {roundMatches.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <span className={cls("text-slate-400", "text-slate-500") + " text-xs"}>{missing.length} missing pick{missing.length !== 1 ? "s" : ""} · {roundMatches.length - missing.length} submitted</span>
+          {missing.length === 0 && <span className="text-emerald-400 text-xs font-bold">✅ All done!</span>}
+        </div>
+      )}
+      <div className="space-y-3">
+        {roundMatches.map(m => (
+          <AdminPickRow key={m.id} match={m} existingPred={preds[m.id]} onSave={pred => savePredForPlayer(player, m.id, pred)} />
+        ))}
+      </div>
     </div>
   );
+}
+
+function AdminPickRow({ match, existingPred, onSave }) {
+  const { cls } = useTheme();
+  const [aReg, setAReg] = useState(existingPred?.aReg ?? ""), [bReg, setBReg] = useState(existingPred?.bReg ?? ""), [advance, setAdvance] = useState(existingPred?.advance ?? ""), [saved, setSaved] = useState(false);
+  const draw = aReg !== "" && bReg !== "" && Number(aReg) === Number(bReg);
+  const save = async () => {
+    if (aReg === "" || bReg === "") return;
+    const p = { aReg: Number(aReg), bReg: Number(bReg) };
+    p.advance = draw ? (advance || match.teamA) : (Number(aReg) > Number(bReg) ? match.teamA : match.teamB);
+    await onSave(p); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  };
+  const ni = (val, set) => <input type="text" inputMode="numeric" pattern="[0-9]*" value={val} onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-11 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500"} />;
+  return (
+    <div className={cls("border-slate-700", "border-slate-200 shadow-sm") + (existingPred ? " border-emerald-500/40" : " border-amber-500/30") + ` border rounded-xl p-3`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold text-emerald-400">{match.id} · {match.venue}</span>
+        {existingPred ? <span className="text-[10px] text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />Has pick: {existingPred.aReg}–{existingPred.bReg}</span> : <span className="text-[10px] text-amber-400">⚠ No pick yet</span>}
+      </div>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="flex-1 text-right text-xs font-bold">{FLAGS[match.teamA]} {match.teamA}</span>
+        {ni(aReg, setAReg)}<span className={cls("text-slate-500", "text-slate-400") + " font-bold"}>–</span>{ni(bReg, setBReg)}
+        <span className="flex-1 text-xs font-bold">{match.teamB} {FLAGS[match.teamB]}</span>
+      </div>
+      {draw && (
+        <div className="grid grid-cols-2 gap-1.5 mb-2">
+          {[match.teamA, match.teamB].map(t => <button key={t} onClick={() => setAdvance(t)} className={`py-1.5 rounded-lg text-xs font-bold transition ${advance === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>{FLAGS[t]} {t}</button>)}
+        </div>
+      )}
+      <button onClick={save} disabled={aReg === "" || bReg === ""} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-1.5 rounded-lg text-xs font-bold text-white">{saved ? "✅ Saved!" : existingPred ? "Update Pick" : "Save Pick"}</button>
+    </div>
+  );
+}
+
+
+const { cls } = useTheme();
+const [round, setRound] = useState("R32");
+const rm = matches.filter(m => m.round === round && m.teamA !== "TBD");
+return (
+  <div>
+    <p className={cls("text-amber-200/70 border-amber-700/30 bg-slate-800/60", "text-amber-700 border-amber-200 bg-amber-50") + " text-xs mb-3 flex items-center gap-1.5 border rounded-lg p-2.5"}><Lock className="w-3.5 h-3.5 shrink-0" /> Enter results to auto-score all players.</p>
+    <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">{ROUNDS.map(r => <button key={r.key} onClick={() => setRound(r.key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${round === r.key ? "bg-emerald-500 text-white" : cls("bg-slate-800 text-slate-400", "bg-white text-slate-500 shadow-sm")}`}>{r.name}</button>)}</div>
+    <div className="space-y-3">{rm.length === 0 && <p className={cls("text-slate-500", "text-slate-400") + " text-sm text-center py-8"}>No confirmed teams yet.</p>}{rm.map(m => <ResultRow key={m.id} match={m} result={results[m.id]} saveResult={saveResult} />)}</div>
+  </div>
+);
 }
 
 function TBDTeamsSection({ matches, updateMatchTeams }) {
