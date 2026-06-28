@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Trophy, Users, Plus, LogIn, Calendar, Lock, Crown, Medal, ChevronRight, Check, Clock, ArrowLeft, Share2, Star } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Trophy, Users, Plus, LogIn, Calendar, Lock, Crown, Medal, ChevronRight, Check, Clock, ArrowLeft, Share2, Star, MapPin } from "lucide-react";
 import { db } from "./firebase";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "firebase/firestore";
 
@@ -11,53 +11,82 @@ const SCORING = {
   champion: 15, finalists: 8,
 };
 
-// ---- Tournament ----
+// ---- Rounds ----
 const ROUNDS = [
-  { key: "R32", name: "Round of 32", count: 16 },
-  { key: "R16", name: "Round of 16", count: 8 },
-  { key: "QF", name: "Quarterfinals", count: 4 },
-  { key: "SF", name: "Semifinals", count: 2 },
-  { key: "F", name: "Final", count: 1 },
+  { key: "R32", name: "Round of 32" },
+  { key: "R16", name: "Round of 16" },
+  { key: "QF", name: "Quarterfinals" },
+  { key: "SF", name: "Semifinals" },
+  { key: "3RD", name: "3rd Place" },
+  { key: "F", name: "Final" },
 ];
 
+// ---- Flags ----
 const FLAGS = {
-  "Germany": "🇩🇪", "Paraguay": "🇵🇾", "France": "🇫🇷", "Sweden": "🇸🇪",
-  "South Africa": "🇿🇦", "Canada": "🇨🇦", "Netherlands": "🇳🇱", "Morocco": "🇲🇦",
-  "Portugal": "🇵🇹", "Croatia": "🇭🇷", "Spain": "🇪🇸", "Austria": "🇦🇹",
-  "USA": "🇺🇸", "Bosnia & Herz.": "🇧🇦", "Belgium": "🇧🇪", "Senegal": "🇸🇳",
-  "Brazil": "🇧🇷", "Japan": "🇯🇵", "Ireland": "🇮🇪", "Norway": "🇳🇴",
-  "Mexico": "🇲🇽", "Ecuador": "🇪🇨", "England": "🇬🇧", "DR Congo": "🇨🇩",
+  "South Africa": "🇿🇦", "Canada": "🇨🇦", "Brazil": "🇧🇷", "Japan": "🇯🇵",
+  "Germany": "🇩🇪", "Paraguay": "🇵🇾", "Netherlands": "🇳🇱", "Morocco": "🇲🇦",
+  "Ivory Coast": "🇨🇮", "Norway": "🇳🇴", "France": "🇫🇷", "Sweden": "🇸🇪",
+  "Mexico": "🇲🇽", "Ecuador": "🇪🇨", "Portugal": "🇵🇹", "Croatia": "🇭🇷",
+  "Spain": "🇪🇸", "Austria": "🇦🇹", "USA": "🇺🇸", "Bosnia & Herz.": "🇧🇦",
+  "Belgium": "🇧🇪", "Senegal": "🇸🇳", "England": "🇬🇧", "DR Congo": "🇨🇩",
   "Argentina": "🇦🇷", "Cape Verde": "🇨🇻", "Australia": "🇦🇺", "Egypt": "🇪🇬",
   "Switzerland": "🇨🇭", "Algeria": "🇩🇿", "Colombia": "🇨🇴", "Ghana": "🇬🇭",
   "TBD": "⚪",
 };
 
-const SAMPLE_R32 = [
-  ["Germany", "Paraguay"], ["France", "Sweden"], ["South Africa", "Canada"], ["Netherlands", "Morocco"],
-  ["Portugal", "Croatia"], ["Spain", "Austria"], ["USA", "Bosnia & Herz."], ["Belgium", "Senegal"],
-  ["Brazil", "Japan"], ["Ireland", "Norway"], ["Mexico", "Ecuador"], ["England", "DR Congo"],
-  ["Argentina", "Cape Verde"], ["Australia", "Egypt"], ["Switzerland", "Algeria"], ["Colombia", "Ghana"],
-];
+// All 32 qualified teams for bonus predictions
+const ALL_TEAMS = [
+  "Algeria", "Argentina", "Australia", "Austria", "Belgium", "Bosnia & Herz.",
+  "Brazil", "Canada", "Cape Verde", "Colombia", "Croatia", "DR Congo",
+  "Ecuador", "Egypt", "England", "France", "Germany", "Ghana",
+  "Ivory Coast", "Japan", "Mexico", "Morocco", "Netherlands", "Norway",
+  "Paraguay", "Portugal", "Senegal", "South Africa", "Spain", "Sweden",
+  "Switzerland", "USA",
+].sort();
 
+// ---- Official Schedule ----
 function buildInitialMatches() {
-  const matches = [];
-  let id = 0;
-  SAMPLE_R32.forEach(([a, b], i) => {
-    matches.push({
-      id: `R32-${id++}`, round: "R32", slot: i, teamA: a, teamB: b,
-      kickoff: Date.now() + (i + 1) * 3600000 * 6
-    });
-  });
-  ["R16", "QF", "SF", "F"].forEach(rk => {
-    const r = ROUNDS.find(x => x.key === rk);
-    for (let i = 0; i < r.count; i++) {
-      matches.push({
-        id: `${rk}-${id++}`, round: rk, slot: i, teamA: "TBD", teamB: "TBD",
-        kickoff: Date.now() + (20 + id) * 3600000 * 24
-      });
-    }
-  });
-  return matches;
+  const t = (s) => new Date(s).getTime();
+  return [
+    // Round of 32
+    { id: "M73", round: "R32", slot: 0, teamA: "South Africa", teamB: "Canada", kickoff: t("2026-06-28T20:00:00Z"), venue: "Los Angeles" },
+    { id: "M74", round: "R32", slot: 1, teamA: "Brazil", teamB: "Japan", kickoff: t("2026-06-29T18:00:00Z"), venue: "Houston" },
+    { id: "M75", round: "R32", slot: 2, teamA: "Germany", teamB: "Paraguay", kickoff: t("2026-06-29T21:30:00Z"), venue: "Boston" },
+    { id: "M76", round: "R32", slot: 3, teamA: "Netherlands", teamB: "Morocco", kickoff: t("2026-06-30T02:00:00Z"), venue: "Monterrey" },
+    { id: "M77", round: "R32", slot: 4, teamA: "Ivory Coast", teamB: "Norway", kickoff: t("2026-06-30T18:00:00Z"), venue: "Dallas" },
+    { id: "M78", round: "R32", slot: 5, teamA: "France", teamB: "Sweden", kickoff: t("2026-06-30T22:00:00Z"), venue: "New York NJ" },
+    { id: "M79", round: "R32", slot: 6, teamA: "Mexico", teamB: "Ecuador", kickoff: t("2026-07-01T02:00:00Z"), venue: "Mexico City" },
+    { id: "M80", round: "R32", slot: 7, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-01T21:00:00Z"), venue: "Atlanta" },
+    { id: "M81", round: "R32", slot: 8, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-01T23:00:00Z"), venue: "San Francisco" },
+    { id: "M82", round: "R32", slot: 9, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-02T02:00:00Z"), venue: "Seattle" },
+    { id: "M83", round: "R32", slot: 10, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-02T18:00:00Z"), venue: "Toronto" },
+    { id: "M84", round: "R32", slot: 11, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-02T21:00:00Z"), venue: "Los Angeles" },
+    { id: "M85", round: "R32", slot: 12, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-03T01:00:00Z"), venue: "Vancouver" },
+    { id: "M86", round: "R32", slot: 13, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-03T18:00:00Z"), venue: "Boston" },
+    { id: "M87", round: "R32", slot: 14, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-03T21:00:00Z"), venue: "Kansas City" },
+    { id: "M88", round: "R32", slot: 15, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-04T01:00:00Z"), venue: "Miami" },
+    // Round of 16
+    { id: "M89", round: "R16", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-04T21:00:00Z"), venue: "Philadelphia" },
+    { id: "M90", round: "R16", slot: 1, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-05T00:30:00Z"), venue: "Houston" },
+    { id: "M91", round: "R16", slot: 2, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-05T21:30:00Z"), venue: "New York NJ" },
+    { id: "M92", round: "R16", slot: 3, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-06T01:00:00Z"), venue: "Mexico City" },
+    { id: "M93", round: "R16", slot: 4, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-06T22:00:00Z"), venue: "Dallas" },
+    { id: "M94", round: "R16", slot: 5, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-07T01:30:00Z"), venue: "Seattle" },
+    { id: "M95", round: "R16", slot: 6, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-07T21:00:00Z"), venue: "Atlanta" },
+    { id: "M96", round: "R16", slot: 7, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-08T01:00:00Z"), venue: "Vancouver" },
+    // Quarterfinals
+    { id: "M97", round: "QF", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-09T23:00:00Z"), venue: "Boston" },
+    { id: "M98", round: "QF", slot: 1, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-11T00:00:00Z"), venue: "Los Angeles" },
+    { id: "M99", round: "QF", slot: 2, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-11T21:00:00Z"), venue: "Miami" },
+    { id: "M100", round: "QF", slot: 3, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-12T01:00:00Z"), venue: "Kansas City" },
+    // Semifinals
+    { id: "M101", round: "SF", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-15T01:00:00Z"), venue: "Dallas" },
+    { id: "M102", round: "SF", slot: 1, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-16T01:00:00Z"), venue: "Atlanta" },
+    // 3rd Place
+    { id: "M103", round: "3RD", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-18T21:00:00Z"), venue: "Miami" },
+    // Final
+    { id: "M104", round: "F", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-19T20:00:00Z"), venue: "New York NJ" },
+  ];
 }
 
 // ---- Scoring Engine ----
@@ -74,14 +103,12 @@ function scoreMatch(pred, result) {
   else if ((pred.advance && pred.advance === result.advance) || (Math.sign(pDiff) === Math.sign(rDiff) && rDiff !== 0)) {
     pts += SCORING.winner; detail.push(["Who advances", SCORING.winner]);
   }
-
   if (result.hadET && pred.aET != null && result.aET != null) {
     const etEx = pred.aET === result.aET && pred.bET === result.bET;
     const etGd = (pred.aET - pred.bET) === (result.aET - result.bET);
     if (etEx) { pts += SCORING.etExact; detail.push(["ET exact", SCORING.etExact]); }
     else if (etGd) { pts += SCORING.etGd; detail.push(["ET goal diff", SCORING.etGd]); }
   }
-
   if (result.hadPens) {
     if (pred.advance && pred.advance === result.advance) { pts += SCORING.pensWinner; detail.push(["Pen winner", SCORING.pensWinner]); }
     if (pred.pensA != null && pred.pensA === result.pensA && pred.pensB === result.pensB) {
@@ -91,18 +118,19 @@ function scoreMatch(pred, result) {
   return { pts, detail };
 }
 
-// ---- Local Storage ----
+// ---- Helpers ----
 const ls = {
   get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } },
 };
-
 function genCode() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
-
 function useToast() {
   const [toast, setToast] = useState("");
   const show = (m) => { setToast(m); setTimeout(() => setToast(""), 2500); };
   return [toast, show];
+}
+function fmtKickoff(ts) {
+  return new Date(ts).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York", timeZoneName: "short" });
 }
 
 // ============================================================
@@ -137,10 +165,8 @@ export default function App() {
     const code = genCode();
     const meta = { code, name: lname, owner: name, created: Date.now() };
     await setDoc(doc(db, "leagues", code), {
-      ...meta,
-      members: [{ name, joined: Date.now() }],
-      matches: buildInitialMatches(),
-      results: {},
+      ...meta, members: [{ name, joined: Date.now() }],
+      matches: buildInitialMatches(), results: {},
     });
     saveLeagues([...leagues, meta]);
     showToast(`League created! Code: ${code}`);
@@ -154,34 +180,23 @@ export default function App() {
     const d = snap.data();
     if (leagues.some(l => l.code === code)) { setActive(code); setScreen("league"); return true; }
     const members = d.members || [];
-    if (!members.some(m => m.name === name)) {
+    if (!members.some(m => m.name === name))
       await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
-    }
-    const meta = { code, name: d.name, owner: d.owner };
-    saveLeagues([...leagues, meta]);
+    saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
     showToast(`Joined ${d.name}!`);
     return true;
   };
 
-  if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-sm">Loading…</div>;
+  if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white">
       {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold">
-          {toast}
-        </div>
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold">{toast}</div>
       )}
-      {(!name || screen === "home") && (
-        <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} />
-      )}
-      {name && screen === "lobby" && (
-        <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague}
-          open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />
-      )}
-      {name && screen === "league" && active && (
-        <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />
-      )}
+      {(!name || screen === "home") && <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} />}
+      {name && screen === "lobby" && <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague} open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />}
+      {name && screen === "league" && active && <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />}
     </div>
   );
 }
@@ -198,7 +213,7 @@ function Home({ nameInput, setNameInput, saveName, name, go }) {
         </div>
         <h1 className="text-3xl font-black tracking-tight">World Cup 2026</h1>
         <p className="text-emerald-400 font-bold text-lg">Knockout Predictor</p>
-        <p className="text-slate-400 text-sm mt-1">Predict every match. Beat your friends.</p>
+        <p className="text-slate-400 text-sm mt-1">Predict every match · Beat your friends</p>
       </div>
       {name ? (
         <button onClick={go} className="bg-emerald-500 hover:bg-emerald-400 transition px-8 py-3 rounded-xl font-bold flex items-center gap-2">
@@ -208,13 +223,9 @@ function Home({ nameInput, setNameInput, saveName, name, go }) {
         <div className="w-full max-w-xs">
           <label className="text-sm text-slate-300 mb-1.5 block">Your display name</label>
           <input value={nameInput} onChange={e => setNameInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && saveName()}
-            placeholder="e.g. Marco" autoFocus
+            onKeyDown={e => e.key === "Enter" && saveName()} placeholder="e.g. Marco" autoFocus
             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 mb-3 outline-none focus:border-emerald-500" />
-          <button onClick={saveName}
-            className="w-full bg-emerald-500 hover:bg-emerald-400 transition py-3 rounded-xl font-bold">
-            Get Started
-          </button>
+          <button onClick={saveName} className="w-full bg-emerald-500 hover:bg-emerald-400 transition py-3 rounded-xl font-bold">Get Started</button>
         </div>
       )}
     </div>
@@ -233,25 +244,17 @@ function Lobby({ name, leagues, createLeague, joinLeague, open }) {
   return (
     <div className="max-w-md mx-auto px-5 py-8">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-slate-400 text-sm">Welcome,</p>
-          <h2 className="text-2xl font-black">{name}</h2>
-        </div>
-        <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-lg">
-          {name[0]?.toUpperCase()}
-        </div>
+        <div><p className="text-slate-400 text-sm">Welcome,</p><h2 className="text-2xl font-black">{name}</h2></div>
+        <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-lg">{name[0]?.toUpperCase()}</div>
       </div>
-
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[["create", Plus, "Create League"], ["join", LogIn, "Join League"]].map(([k, Icon, label]) => (
           <button key={k} onClick={() => setMode(mode === k ? null : k)}
             className={`p-4 rounded-xl border transition flex flex-col items-center gap-2 ${mode === k ? "bg-emerald-500 border-emerald-400" : "bg-slate-800/60 border-slate-700 hover:border-emerald-500"}`}>
-            <Icon className="w-6 h-6" />
-            <span className="font-bold text-sm">{label}</span>
+            <Icon className="w-6 h-6" /><span className="font-bold text-sm">{label}</span>
           </button>
         ))}
       </div>
-
       {mode === "create" && (
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-6">
           <input value={lname} onChange={e => setLname(e.target.value)} placeholder="League name (e.g. Office Cup)"
@@ -264,37 +267,27 @@ function Lobby({ name, leagues, createLeague, joinLeague, open }) {
           </button>
         </div>
       )}
-
       {mode === "join" && (
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-6">
-          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="5-letter code"
-            maxLength={5}
+          <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="5-letter code" maxLength={5}
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 mb-3 font-mono tracking-widest uppercase outline-none focus:border-emerald-500" />
           <button disabled={busy || !code.trim()} onClick={async () => {
             setBusy(true); const ok = await joinLeague(code);
-            setBusy(false);
-            if (ok) { setCode(""); setMode(null); open(code.trim().toUpperCase()); }
+            setBusy(false); if (ok) { setCode(""); setMode(null); open(code.trim().toUpperCase()); }
           }} className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 py-2.5 rounded-lg font-bold">
             {busy ? "Joining…" : "Join"}
           </button>
         </div>
       )}
-
       <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Your Leagues</h3>
       {leagues.length === 0 ? (
-        <div className="text-center py-12 text-slate-500">
-          <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">Create or join a league to start!</p>
-        </div>
+        <div className="text-center py-12 text-slate-500"><Users className="w-10 h-10 mx-auto mb-2 opacity-40" /><p className="text-sm">Create or join a league to start!</p></div>
       ) : (
         <div className="space-y-2">
           {leagues.map(l => (
             <button key={l.code} onClick={() => open(l.code)}
               className="w-full bg-slate-800/60 border border-slate-700 hover:border-emerald-500 transition rounded-xl p-4 flex items-center justify-between">
-              <div className="text-left">
-                <p className="font-bold">{l.name}</p>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">Code: {l.code}</p>
-              </div>
+              <div className="text-left"><p className="font-bold">{l.name}</p><p className="text-xs text-slate-400 font-mono mt-0.5">Code: {l.code}</p></div>
               <ChevronRight className="w-5 h-5 text-slate-500" />
             </button>
           ))}
@@ -313,14 +306,12 @@ function League({ code, me, back, tab, setTab, showToast }) {
   const [myBonus, setMyBonus] = useState(null);
   const [allPreds, setAllPreds] = useState({});
   const [allBonus, setAllBonus] = useState({});
-
   const isOwner = data?.owner === me;
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "leagues", code), async snap => {
       if (!snap.exists()) return;
-      const d = snap.data();
-      setData(d);
+      const d = snap.data(); setData(d);
       const ap = {}, ab = {};
       for (const m of (d.members || [])) {
         const ps = await getDoc(doc(db, "leagues", code, "predictions", m.name));
@@ -347,37 +338,30 @@ function League({ code, me, back, tab, setTab, showToast }) {
     setMyPreds(next); setAllPreds(p => ({ ...p, [me]: next }));
     await setDoc(doc(db, "leagues", code, "predictions", me), next);
   };
-
   const saveBonusFn = async (b) => {
     setMyBonus(b); setAllBonus(p => ({ ...p, [me]: b }));
     await setDoc(doc(db, "leagues", code, "bonuses", me), b);
   };
-
   const saveResult = async (matchId, result) => {
     const results = { ...(data?.results || {}), [matchId]: result };
     await updateDoc(doc(db, "leagues", code), { results });
   };
 
   if (!data) return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading league…</div>;
-
   const { matches = [], results = {}, members = [], name: lname } = data;
   const tabs = [["matches", "Matches", Calendar], ["bracket", "Bracket", Trophy], ["board", "Leaderboard", Medal], ...(isOwner ? [["admin", "Admin", Lock]] : [])];
 
   return (
     <div className="max-w-md mx-auto px-4 py-5 pb-28">
       <div className="flex items-center justify-between mb-4">
-        <button onClick={back} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm">
-          <ArrowLeft className="w-4 h-4" /> Leagues
-        </button>
+        <button onClick={back} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm"><ArrowLeft className="w-4 h-4" /> Leagues</button>
         <button onClick={() => { navigator.clipboard?.writeText(code); showToast(`Code ${code} copied!`); }}
           className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-sm font-mono">
           <Share2 className="w-3.5 h-3.5" /> {code}
         </button>
       </div>
-
       <h2 className="text-2xl font-black mb-1">{lname}</h2>
       <p className="text-slate-400 text-sm mb-5">{members.length} player{members.length !== 1 ? "s" : ""}</p>
-
       <div className="flex gap-1 bg-slate-800/60 p-1 rounded-xl mb-5">
         {tabs.map(([k, label, Icon]) => (
           <button key={k} onClick={() => setTab(k)}
@@ -386,7 +370,6 @@ function League({ code, me, back, tab, setTab, showToast }) {
           </button>
         ))}
       </div>
-
       {tab === "matches" && <MatchesTab matches={matches} myPreds={myPreds} savePred={savePred} myBonus={myBonus} saveBonus={saveBonusFn} />}
       {tab === "bracket" && <BracketTab matches={matches} results={results} />}
       {tab === "board" && <Leaderboard members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} me={me} />}
@@ -426,7 +409,6 @@ function BonusCard({ myBonus, saveBonus }) {
   const [f1, setF1] = useState(myBonus?.finalists?.[0] || "");
   const [f2, setF2] = useState(myBonus?.finalists?.[1] || "");
   const locked = !!myBonus?.locked;
-  const teams = [...new Set(SAMPLE_R32.flat())].sort();
 
   return (
     <div className="bg-gradient-to-br from-amber-900/40 to-slate-800/60 border border-amber-700/40 rounded-xl p-4 mb-5">
@@ -446,14 +428,14 @@ function BonusCard({ myBonus, saveBonus }) {
       )}
       {open && !locked && (
         <div className="mt-3 space-y-3">
-          <p className="text-xs text-amber-200/70">Pick once — locked permanently after saving.</p>
+          <p className="text-xs text-amber-200/70">Pick once — locked permanently. Cannot be changed.</p>
           {[["Champion (+15 pts)", champ, setChamp], ["Finalist 1 (+8 if both correct)", f1, setF1], ["Finalist 2", f2, setF2]].map(([label, val, setter]) => (
             <div key={label}>
               <label className="text-xs text-slate-400 mb-1 block">{label}</label>
               <select value={val} onChange={e => setter(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-amber-500">
-                <option value="">Select…</option>
-                {teams.map(t => <option key={t} value={t}>{FLAGS[t]} {t}</option>)}
+                <option value="">Select team…</option>
+                {ALL_TEAMS.map(t => <option key={t} value={t}>{FLAGS[t]} {t}</option>)}
               </select>
             </div>
           ))}
@@ -475,7 +457,6 @@ function MatchCard({ match, pred, savePred }) {
   const [aReg, setAReg] = useState(pred?.aReg ?? "");
   const [bReg, setBReg] = useState(pred?.bReg ?? "");
   const [advance, setAdvance] = useState(pred?.advance ?? "");
-
   const draw = aReg !== "" && bReg !== "" && Number(aReg) === Number(bReg);
 
   const save = () => {
@@ -493,12 +474,20 @@ function MatchCard({ match, pred, savePred }) {
   };
 
   return (
-    <div className={`bg-slate-800/60 border rounded-xl p-4 ${locked ? "border-slate-700/50 opacity-75" : "border-slate-700"}`}>
-      <div className="flex justify-between mb-3">
-        <span className="text-[11px] text-slate-500">{ROUNDS.find(r => r.key === match.round)?.name}</span>
-        <span className={`text-[11px] flex items-center gap-1 ${locked ? "text-red-400" : "text-emerald-400"}`}>
-          {locked ? <><Lock className="w-3 h-3" /> Locked</> : <><Clock className="w-3 h-3" /> {timeLeft()}</>}
-        </span>
+    <div className={`bg-slate-800/60 border rounded-xl p-4 ${locked ? "border-slate-700/50 opacity-80" : "border-slate-700"}`}>
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <span className="text-[11px] font-bold text-emerald-400">{match.id}</span>
+          <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-0.5">
+            <MapPin className="w-3 h-3" /> {match.venue}
+          </div>
+        </div>
+        <div className="text-right">
+          <span className={`text-[11px] flex items-center gap-1 justify-end ${locked ? "text-red-400" : "text-emerald-400"}`}>
+            {locked ? <><Lock className="w-3 h-3" /> Locked</> : <><Clock className="w-3 h-3" /> {timeLeft()}</>}
+          </span>
+          <p className="text-[10px] text-slate-500 mt-0.5">{fmtKickoff(match.kickoff)}</p>
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <div className="flex-1 text-right"><span className="font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span></div>
@@ -529,7 +518,7 @@ function MatchCard({ match, pred, savePred }) {
           <Check className="w-3 h-3" /> {pred.aReg}–{pred.bReg}{draw && pred.advance ? ` · ${pred.advance} advances` : ""}
         </p>
       )}
-      {isTBD && <p className="mt-2 text-[11px] text-slate-500">Teams confirmed after previous round</p>}
+      {isTBD && <p className="mt-2 text-[11px] text-slate-500">Teams confirmed after group stage</p>}
     </div>
   );
 }
@@ -547,14 +536,16 @@ function BracketTab({ matches, results }) {
             {matches.filter(m => m.round === r.key).map(m => {
               const res = results[m.id];
               return (
-                <div key={m.id} className="bg-slate-800/60 border border-slate-700 rounded-lg p-2.5 flex items-center text-sm">
-                  <span className={`flex-1 ${res?.advance === m.teamA ? "font-bold text-emerald-400" : "text-slate-300"}`}>
-                    {FLAGS[m.teamA]} {m.teamA}
-                  </span>
-                  <span className="text-slate-500 text-xs mx-3 font-mono">{res ? `${res.aReg}–${res.bReg}` : "vs"}</span>
-                  <span className={`flex-1 text-right ${res?.advance === m.teamB ? "font-bold text-emerald-400" : "text-slate-300"}`}>
-                    {m.teamB} {FLAGS[m.teamB]}
-                  </span>
+                <div key={m.id} className="bg-slate-800/60 border border-slate-700 rounded-lg p-2.5">
+                  <div className="flex items-center text-sm">
+                    <span className="text-[10px] text-emerald-400 font-bold w-10 shrink-0">{m.id}</span>
+                    <span className={`flex-1 ${res?.advance === m.teamA ? "font-bold text-emerald-400" : "text-slate-300"}`}>{FLAGS[m.teamA]} {m.teamA}</span>
+                    <span className="text-slate-500 text-xs mx-2 font-mono">{res ? `${res.aReg}–${res.bReg}` : "vs"}</span>
+                    <span className={`flex-1 text-right ${res?.advance === m.teamB ? "font-bold text-emerald-400" : "text-slate-300"}`}>{m.teamB} {FLAGS[m.teamB]}</span>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1 ml-10 text-[10px] text-slate-500">
+                    <MapPin className="w-2.5 h-2.5" /> {m.venue}
+                  </div>
                 </div>
               );
             })}
@@ -589,7 +580,6 @@ function Leaderboard({ members, allPreds, allBonus, matches, results, me }) {
   const rows = members
     .map(m => ({ name: m.name, ...computeTotal(allPreds[m.name] || {}, allBonus[m.name], matches, results) }))
     .sort((a, b) => b.total - a.total || b.exacts - a.exacts || b.advances - a.advances);
-
   const medals = ["bg-amber-400 text-slate-900", "bg-slate-300 text-slate-900", "bg-amber-700 text-white"];
 
   return (
@@ -597,9 +587,7 @@ function Leaderboard({ members, allPreds, allBonus, matches, results, me }) {
       <div className="space-y-2 mb-6">
         {rows.map((r, i) => (
           <div key={r.name} className={`flex items-center gap-3 p-3 rounded-xl border ${r.name === me ? "bg-emerald-500/10 border-emerald-500/40" : "bg-slate-800/60 border-slate-700"}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${medals[i] || "bg-slate-700 text-white"}`}>
-              {i + 1}
-            </div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${medals[i] || "bg-slate-700 text-white"}`}>{i + 1}</div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-sm flex items-center gap-1.5 flex-wrap">
                 {r.name}
@@ -637,8 +625,7 @@ function AdminTab({ matches, results, saveResult }) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3 bg-slate-800/60 border border-amber-700/30 rounded-lg p-2.5 text-xs text-amber-200/70">
-        <Lock className="w-3.5 h-3.5 shrink-0" />
-        Owner only — enter results here to auto-score all players.
+        <Lock className="w-3.5 h-3.5 shrink-0" /> Owner only — enter results to auto-score all players.
       </div>
       <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
         {ROUNDS.map(r => (
@@ -649,7 +636,7 @@ function AdminTab({ matches, results, saveResult }) {
         ))}
       </div>
       <div className="space-y-3">
-        {rm.length === 0 && <p className="text-slate-500 text-sm text-center py-8">No matches with set teams yet.</p>}
+        {rm.length === 0 && <p className="text-slate-500 text-sm text-center py-8">No matches with confirmed teams yet.</p>}
         {rm.map(m => <ResultRow key={m.id} match={m} result={results[m.id]} saveResult={saveResult} />)}
       </div>
     </div>
@@ -672,43 +659,37 @@ function ResultRow({ match, result, saveResult }) {
     saveResult(match.id, {
       aReg: Number(aReg), bReg: Number(bReg),
       hadET, aET: hadET ? Number(aET) : null, bET: hadET ? Number(bET) : null,
-      hadPens, pensA: hadPens ? Number(pensA) : null, pensB: hadPens ? Number(pensB) : null,
-      advance,
+      hadPens, pensA: hadPens ? Number(pensA) : null, pensB: hadPens ? Number(pensB) : null, advance,
     });
   };
 
-  const numInput = (val, set) => (
+  const ni = (val, set) => (
     <input type="number" min="0" value={val} onChange={e => set(e.target.value)}
       className="w-11 h-10 text-center bg-slate-900 border border-slate-700 rounded-lg font-bold outline-none focus:border-emerald-500" />
   );
 
   return (
     <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3">
+      <p className="text-[11px] text-emerald-400 font-bold mb-2">{match.id} · {match.venue}</p>
       <div className="flex items-center gap-2 mb-3">
         <span className="flex-1 text-right font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span>
-        {numInput(aReg, setAReg)}
-        <span className="text-slate-500 font-bold">–</span>
-        {numInput(bReg, setBReg)}
+        {ni(aReg, setAReg)} <span className="text-slate-500 font-bold">–</span> {ni(bReg, setBReg)}
         <span className="flex-1 font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span>
       </div>
       <div className="flex gap-4 mb-3 text-xs">
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={hadET} onChange={e => setHadET(e.target.checked)} /> Extra time
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={hadPens} onChange={e => setHadPens(e.target.checked)} /> Penalties
-        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={hadET} onChange={e => setHadET(e.target.checked)} /> Extra time</label>
+        <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={hadPens} onChange={e => setHadPens(e.target.checked)} /> Penalties</label>
       </div>
       {hadET && (
         <div className="flex items-center gap-2 mb-3 text-xs">
           <span className="text-slate-400 w-16">ET score:</span>
-          {numInput(aET, setAET)} <span className="text-slate-500">–</span> {numInput(bET, setBET)}
+          {ni(aET, setAET)} <span className="text-slate-500">–</span> {ni(bET, setBET)}
         </div>
       )}
       {hadPens && (
         <div className="flex items-center gap-2 mb-3 text-xs">
           <span className="text-slate-400 w-16">Pens:</span>
-          {numInput(pensA, setPensA)} <span className="text-slate-500">–</span> {numInput(pensB, setPensB)}
+          {ni(pensA, setPensA)} <span className="text-slate-500">–</span> {ni(pensB, setPensB)}
         </div>
       )}
       <div className="grid grid-cols-2 gap-2 mb-3">
@@ -723,11 +704,7 @@ function ResultRow({ match, result, saveResult }) {
         className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 py-2 rounded-lg font-bold text-sm transition">
         Save Result
       </button>
-      {result && (
-        <p className="text-[11px] text-emerald-400 mt-2 flex items-center gap-1">
-          <Check className="w-3 h-3" /> Saved
-        </p>
-      )}
+      {result && <p className="text-[11px] text-emerald-400 mt-2 flex items-center gap-1"><Check className="w-3 h-3" /> Saved</p>}
     </div>
   );
 }
