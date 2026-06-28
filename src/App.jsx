@@ -739,7 +739,10 @@ function AdminPicksSection({ matches, members, allPreds, savePredForPlayer }) {
   const missing = roundMatches.filter(m => !preds[m.id]);
   return (
     <div>
-      <p className={cls("text-slate-400", "text-slate-500") + " text-xs mb-3"}>Enter or override predictions on behalf of players who missed the deadline.</p>
+      <div className={cls("border-amber-700/30 bg-amber-900/20", "border-amber-200 bg-amber-50") + " border rounded-lg p-2.5 mb-4 text-xs"}>
+        <p className="text-amber-400 font-bold mb-0.5">⚠️ Admin Override</p>
+        <p className={cls("text-amber-200/70", "text-amber-700")}>You can add or override predictions for any player on any match — including locked ones. Use this for players who missed submitting.</p>
+      </div>
       <div className="mb-4">
         <label className={cls("text-slate-400", "text-slate-500") + " text-xs mb-1 block"}>Select player:</label>
         <select value={player} onChange={e => setPlayer(e.target.value)} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500"}>
@@ -752,7 +755,7 @@ function AdminPicksSection({ matches, members, allPreds, savePredForPlayer }) {
       {roundMatches.length === 0 && <p className={cls("text-slate-500", "text-slate-400") + " text-sm text-center py-6"}>No confirmed teams yet.</p>}
       {roundMatches.length > 0 && (
         <div className="mb-3 flex items-center gap-2">
-          <span className={cls("text-slate-400", "text-slate-500") + " text-xs"}>{missing.length} missing pick{missing.length !== 1 ? "s" : ""} · {roundMatches.length - missing.length} submitted</span>
+          <span className={cls("text-slate-400", "text-slate-500") + " text-xs"}>{missing.length} missing · {roundMatches.length - missing.length} submitted</span>
           {missing.length === 0 && <span className="text-emerald-400 text-xs font-bold">✅ All done!</span>}
         </div>
       )}
@@ -767,32 +770,72 @@ function AdminPicksSection({ matches, members, allPreds, savePredForPlayer }) {
 
 function AdminPickRow({ match, existingPred, onSave }) {
   const { cls } = useTheme();
-  const [aReg, setAReg] = useState(existingPred?.aReg ?? ""), [bReg, setBReg] = useState(existingPred?.bReg ?? ""), [advance, setAdvance] = useState(existingPred?.advance ?? ""), [saved, setSaved] = useState(false);
+  const now = Date.now(), isMatchLocked = now >= match.kickoff;
+  const [aReg, setAReg] = useState(existingPred?.aReg ?? ""), [bReg, setBReg] = useState(existingPred?.bReg ?? "");
+  const [advance, setAdvance] = useState(existingPred?.advance ?? "");
+  const [predET, setPredET] = useState(existingPred?.aET != null), [aET, setAET] = useState(existingPred?.aET ?? ""), [bET, setBET] = useState(existingPred?.bET ?? "");
+  const [predPens, setPredPens] = useState(existingPred?.pensA != null), [pensA, setPensA] = useState(existingPred?.pensA ?? ""), [pensB, setPensB] = useState(existingPred?.pensB ?? "");
+  const [saved, setSaved] = useState(false);
   const draw = aReg !== "" && bReg !== "" && Number(aReg) === Number(bReg);
+  const autoAdv = aReg !== "" && bReg !== "" && !draw ? (Number(aReg) > Number(bReg) ? match.teamA : match.teamB) : null;
+  const effectiveAdv = advance || (autoAdv || "");
+
   const save = async () => {
     if (aReg === "" || bReg === "") return;
-    const p = { aReg: Number(aReg), bReg: Number(bReg) };
-    p.advance = draw ? (advance || match.teamA) : (Number(aReg) > Number(bReg) ? match.teamA : match.teamB);
+    const p = { aReg: Number(aReg), bReg: Number(bReg), advance: effectiveAdv };
+    if (predET && aET !== "" && bET !== "") { p.aET = Number(aET); p.bET = Number(bET); }
+    if (predPens && pensA !== "" && pensB !== "") { p.pensA = Number(pensA); p.pensB = Number(pensB); }
     await onSave(p); setSaved(true); setTimeout(() => setSaved(false), 2000);
   };
   const ni = (val, set) => <input type="text" inputMode="numeric" pattern="[0-9]*" value={val} onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} className={cls("bg-slate-900 border-slate-700 text-white", "bg-slate-50 border-slate-300 text-slate-800") + " w-11 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500"} />;
+
   return (
     <div className={cls("border-slate-700", "border-slate-200 shadow-sm") + (existingPred ? " border-emerald-500/40" : " border-amber-500/30") + ` border rounded-xl p-3`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold text-emerald-400">{match.id} · {match.venue}</span>
-        {existingPred ? <span className="text-[10px] text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />Has pick: {existingPred.aReg}–{existingPred.bReg}</span> : <span className="text-[10px] text-amber-400">⚠ No pick yet</span>}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-emerald-400">{match.id} · {match.venue}</span>
+          {isMatchLocked && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">🔒 Locked</span>}
+        </div>
+        {existingPred ? <span className="text-[10px] text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />Has pick</span> : <span className="text-[10px] text-amber-400 font-bold">⚠ No pick</span>}
       </div>
-      <div className="flex items-center gap-2 mb-2">
+
+      {/* Score */}
+      <div className="flex items-center gap-2 mb-3">
         <span className="flex-1 text-right text-xs font-bold">{FLAGS[match.teamA]} {match.teamA}</span>
         {ni(aReg, setAReg)}<span className={cls("text-slate-500", "text-slate-400") + " font-bold"}>–</span>{ni(bReg, setBReg)}
         <span className="flex-1 text-xs font-bold">{match.teamB} {FLAGS[match.teamB]}</span>
       </div>
-      {draw && (
-        <div className="grid grid-cols-2 gap-1.5 mb-2">
-          {[match.teamA, match.teamB].map(t => <button key={t} onClick={() => setAdvance(t)} className={`py-1.5 rounded-lg text-xs font-bold transition ${advance === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>{FLAGS[t]} {t}</button>)}
-        </div>
-      )}
-      <button onClick={save} disabled={aReg === "" || bReg === ""} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-1.5 rounded-lg text-xs font-bold text-white">{saved ? "✅ Saved!" : existingPred ? "Update Pick" : "Save Pick"}</button>
+
+      {/* Who advances */}
+      <div className="grid grid-cols-2 gap-1.5 mb-3">
+        {[match.teamA, match.teamB].map(t => (
+          <button key={t} onClick={() => setAdvance(t)} className={`py-1.5 rounded-lg text-xs font-bold transition ${effectiveAdv === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>{FLAGS[t]} {t}</button>
+        ))}
+      </div>
+
+      {/* ET */}
+      <div className={cls("border-slate-700/50", "border-slate-200") + " border-t pt-2 mb-2"}>
+        <label className="flex items-center gap-2 text-xs cursor-pointer mb-1.5">
+          <input type="checkbox" checked={predET} onChange={e => { setPredET(e.target.checked); if (!e.target.checked) { setAET(""); setBET(""); } }} />
+          <span className={cls("text-slate-400", "text-slate-500")}>ET score</span>
+          <span className="text-emerald-400 text-[10px] ml-auto">+5/+2</span>
+        </label>
+        {predET && <div className="flex items-center gap-2 pl-5">{ni(aET, setAET)}<span className={cls("text-slate-500", "text-slate-400")}>–</span>{ni(bET, setBET)}</div>}
+      </div>
+
+      {/* Pens */}
+      <div className={cls("border-slate-700/50", "border-slate-200") + " border-t pt-2 mb-3"}>
+        <label className="flex items-center gap-2 text-xs cursor-pointer mb-1.5">
+          <input type="checkbox" checked={predPens} onChange={e => { setPredPens(e.target.checked); if (!e.target.checked) { setPensA(""); setPensB(""); } }} />
+          <span className={cls("text-slate-400", "text-slate-500")}>Penalty shootout</span>
+          <span className="text-emerald-400 text-[10px] ml-auto">+3/+3</span>
+        </label>
+        {predPens && <div className="flex items-center gap-2 pl-5">{ni(pensA, setPensA)}<span className={cls("text-slate-500", "text-slate-400")}>–</span>{ni(pensB, setPensB)}</div>}
+      </div>
+
+      <button onClick={save} disabled={aReg === "" || bReg === ""} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-1.5 rounded-lg text-xs font-bold text-white">
+        {saved ? "✅ Saved!" : existingPred ? "Update Pick" : "Save Pick"}
+      </button>
     </div>
   );
 }
