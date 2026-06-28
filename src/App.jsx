@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Trophy, Users, Plus, LogIn, Calendar, Lock, Crown, Medal, ChevronRight, Check, Clock, ArrowLeft, Share2, Star, MapPin } from "lucide-react";
+import { Trophy, Users, Plus, LogIn, Calendar, Lock, Crown, Medal, ChevronRight, Check, Clock, ArrowLeft, Share2, Star, MapPin, Eye } from "lucide-react";
 import { db } from "./firebase";
-import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, deleteDoc } from "firebase/firestore";
 
 // ---- Scoring ----
 const SCORING = {
@@ -173,32 +173,45 @@ export default function App() {
     return code;
   };
 
-  const joinLeague = async (raw) => {
-    const code = raw.trim().toUpperCase();
-    const snap = await getDoc(doc(db, "leagues", code));
-    if (!snap.exists()) { showToast("League not found"); return false; }
-    const d = snap.data();
-    if (leagues.some(l => l.code === code)) { setActive(code); setScreen("league"); return true; }
-    const members = d.members || [];
-    if (!members.some(m => m.name === name))
-      await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
-    saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
-    showToast(`Joined ${d.name}!`);
-    return true;
+  const removeLeague = async (league, me) => {
+    if (league.owner === me) {
+      // Owner: delete the whole league
+      await deleteDoc(doc(db, "leagues", league.code));
+    } else {
+      // Member: just remove self from members list
+      const snap = await getDoc(doc(db, "leagues", league.code));
+      if (snap.exists()) {
+        const members = (snap.data().members || []).filter(m => m.name !== me);
+        await updateDoc(doc(db, "leagues", league.code), { members });
+      }
+    }
+    saveLeagues(leagues.filter(l => l.code !== league.code));
   };
+  const code = raw.trim().toUpperCase();
+  const snap = await getDoc(doc(db, "leagues", code));
+  if (!snap.exists()) { showToast("League not found"); return false; }
+  const d = snap.data();
+  if (leagues.some(l => l.code === code)) { setActive(code); setScreen("league"); return true; }
+  const members = d.members || [];
+  if (!members.some(m => m.name === name))
+    await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
+  saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
+  showToast(`Joined ${d.name}!`);
+  return true;
+};
 
-  if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>;
+if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>;
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white">
-      {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold">{toast}</div>
-      )}
-      {(!name || screen === "home") && <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} />}
-      {name && screen === "lobby" && <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague} open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />}
-      {name && screen === "league" && active && <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />}
-    </div>
-  );
+return (
+  <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white">
+    {toast && (
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold">{toast}</div>
+    )}
+    {(!name || screen === "home") && <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} />}
+    {name && screen === "lobby" && <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague} removeLeague={removeLeague} open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />}
+    {name && screen === "league" && active && <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />}
+  </div>
+);
 }
 
 // ============================================================
@@ -235,11 +248,12 @@ function Home({ nameInput, setNameInput, saveName, name, go }) {
 // ============================================================
 // Lobby
 // ============================================================
-function Lobby({ name, leagues, createLeague, joinLeague, open }) {
+function Lobby({ name, leagues, createLeague, joinLeague, open, removeLeague }) {
   const [mode, setMode] = useState(null);
   const [lname, setLname] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(null); // league code pending confirm
 
   return (
     <div className="max-w-md mx-auto px-5 py-8">
@@ -285,11 +299,35 @@ function Lobby({ name, leagues, createLeague, joinLeague, open }) {
       ) : (
         <div className="space-y-2">
           {leagues.map(l => (
-            <button key={l.code} onClick={() => open(l.code)}
-              className="w-full bg-slate-800/60 border border-slate-700 hover:border-emerald-500 transition rounded-xl p-4 flex items-center justify-between">
-              <div className="text-left"><p className="font-bold">{l.name}</p><p className="text-xs text-slate-400 font-mono mt-0.5">Code: {l.code}</p></div>
-              <ChevronRight className="w-5 h-5 text-slate-500" />
-            </button>
+            <div key={l.code} className="bg-slate-800/60 border border-slate-700 hover:border-emerald-500 transition rounded-xl overflow-hidden">
+              <div className="flex items-center">
+                <button onClick={() => open(l.code)} className="flex-1 p-4 text-left">
+                  <p className="font-bold">{l.name}</p>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">Code: {l.code} · {l.owner === name ? "Owner" : `by ${l.owner}`}</p>
+                </button>
+                <button onClick={() => setConfirm(confirm === l.code ? null : l.code)}
+                  className="px-4 py-4 text-slate-500 hover:text-red-400 transition text-lg">
+                  {confirm === l.code ? "✕" : "🗑️"}
+                </button>
+              </div>
+              {confirm === l.code && (
+                <div className="border-t border-slate-700 px-4 py-3 bg-slate-900/60">
+                  <p className="text-xs text-slate-300 mb-2">
+                    {l.owner === name ? "Delete this league for everyone?" : "Leave this league?"}
+                  </p>
+                  <div className="flex gap-2">
+                    <button onClick={async () => { await removeLeague(l, name); setConfirm(null); }}
+                      className="flex-1 bg-red-600 hover:bg-red-500 py-1.5 rounded-lg text-xs font-bold">
+                      {l.owner === name ? "Delete" : "Leave"}
+                    </button>
+                    <button onClick={() => setConfirm(null)}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 py-1.5 rounded-lg text-xs font-bold">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -349,7 +387,7 @@ function League({ code, me, back, tab, setTab, showToast }) {
 
   if (!data) return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading league…</div>;
   const { matches = [], results = {}, members = [], name: lname } = data;
-  const tabs = [["matches", "Matches", Calendar], ["bracket", "Bracket", Trophy], ["board", "Leaderboard", Medal], ...(isOwner ? [["admin", "Admin", Lock]] : [])];
+  const tabs = [["matches", "Matches", Calendar], ["picks", "All Picks", Eye], ["bracket", "Bracket", Trophy], ["board", "Leaderboard", Medal], ...(isOwner ? [["admin", "Admin", Lock]] : [])];
 
   return (
     <div className="max-w-md mx-auto px-4 py-5 pb-28">
@@ -371,6 +409,7 @@ function League({ code, me, back, tab, setTab, showToast }) {
         ))}
       </div>
       {tab === "matches" && <MatchesTab matches={matches} myPreds={myPreds} savePred={savePred} myBonus={myBonus} saveBonus={saveBonusFn} />}
+      {tab === "picks" && <PicksTab matches={matches} results={results} members={members} allPreds={allPreds} />}
       {tab === "bracket" && <BracketTab matches={matches} results={results} />}
       {tab === "board" && <Leaderboard members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} me={me} />}
       {tab === "admin" && isOwner && <AdminTab matches={matches} results={results} saveResult={saveResult} />}
@@ -519,6 +558,96 @@ function MatchCard({ match, pred, savePred }) {
         </p>
       )}
       {isTBD && <p className="mt-2 text-[11px] text-slate-500">Teams confirmed after group stage</p>}
+    </div>
+  );
+}
+
+// ============================================================
+// All Picks Tab
+// ============================================================
+function PicksTab({ matches, results, members, allPreds }) {
+  const [round, setRound] = useState("R32");
+  const roundMatches = matches.filter(m => m.round === round);
+
+  return (
+    <div>
+      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
+        {ROUNDS.map(r => (
+          <button key={r.key} onClick={() => setRound(r.key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${round === r.key ? "bg-emerald-500" : "bg-slate-800 text-slate-400"}`}>
+            {r.name}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-4">
+        {roundMatches.map(m => {
+          const res = results[m.id];
+          const isTBD = m.teamA === "TBD" || m.teamB === "TBD";
+          return (
+            <div key={m.id} className="bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden">
+              {/* Match header */}
+              <div className="p-3 bg-slate-900/60 border-b border-slate-700">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-emerald-400">{m.id}</span>
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{m.venue}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-sm flex-1">{FLAGS[m.teamA]} {m.teamA}</span>
+                  <span className={`font-mono font-bold text-sm px-2 py-0.5 rounded ${res ? "bg-emerald-500/20 text-emerald-300" : "text-slate-500"}`}>
+                    {res ? `${res.aReg}–${res.bReg}` : "vs"}
+                  </span>
+                  <span className="font-bold text-sm flex-1 text-right">{m.teamB} {FLAGS[m.teamB]}</span>
+                </div>
+                {res?.advance && (
+                  <p className="text-[11px] text-emerald-400 text-center mt-1.5">
+                    ✅ {FLAGS[res.advance]} {res.advance} advances
+                    {res.hadPens ? ` (pens ${res.pensA}–${res.pensB})` : res.hadET ? " (ET)" : ""}
+                  </p>
+                )}
+                {isTBD && <p className="text-[11px] text-slate-600 text-center mt-1">Teams TBD</p>}
+              </div>
+              {/* Player predictions */}
+              <div className="divide-y divide-slate-700/30">
+                {members.length === 0 && (
+                  <p className="text-slate-500 text-xs text-center py-3">No members yet</p>
+                )}
+                {members.map(member => {
+                  const pred = allPreds[member.name]?.[m.id];
+                  const score = (res && pred) ? scoreMatch(pred, res) : null;
+                  const isDraw = pred && pred.aReg === pred.bReg;
+                  return (
+                    <div key={member.name} className="flex items-center px-3 py-2.5 gap-3">
+                      <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold shrink-0">
+                        {member.name[0]?.toUpperCase()}
+                      </div>
+                      <span className="text-sm font-medium flex-1 truncate">{member.name}</span>
+                      {pred ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-mono text-slate-300">
+                            {pred.aReg}–{pred.bReg}
+                            {isDraw && pred.advance ? (
+                              <span className="text-[10px] text-slate-400 ml-1">({FLAGS[pred.advance]})</span>
+                            ) : null}
+                          </span>
+                          {score != null ? (
+                            <span className={`text-xs font-black px-2 py-0.5 rounded-full min-w-[40px] text-center ${score.pts >= SCORING.exactReg ? "bg-amber-500/30 text-amber-300" : score.pts > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700 text-slate-500"}`}>
+                              +{score.pts}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-600 italic min-w-[40px] text-right">—</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-600 italic">no pick</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
