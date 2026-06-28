@@ -1,0 +1,9 @@
+{
+    "name": "WC 2026 Knockout Predictor",
+    "short_name": "WC 2026",
+    "description": "Predict World Cup 2026 knockout stage matches with friends",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0f172a",
+    "theme_color": "#10b981"
+}
