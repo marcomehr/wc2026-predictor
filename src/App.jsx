@@ -195,80 +195,112 @@ export default function App() {
     const n = ls.get("wc26:name"), l = ls.get("wc26:leagues");
     if (n) setName(n);
     if (l) setLeagues(l);
+    // Sync leagues from Firebase cloud profile on load
+    if (n) {
+      getDoc(doc(db, "userProfiles", n)).then(snap => {
+        if (snap.exists()) {
+          const cloudLeagues = snap.data().leagues || [];
+          setLeagues(cloudLeagues);
+          ls.set("wc26:leagues", cloudLeagues);
+        }
+      }).catch(() => { });
+    }
     setReady(true);
   }, []);
 
-  const saveLeagues = next => { setLeagues(next); ls.set("wc26:leagues", next); };
-
-  const saveName = () => {
-    const n = nameInput.trim();
-    if (!n) return;
-    setName(n); ls.set("wc26:name", n); setScreen("lobby");
+  const switchUser = () => {
+    setName(""); setNameInput(""); setLeagues([]);
+    ls.set("wc26:name", null); ls.set("wc26:leagues", []);
+    setScreen("home");
   };
+  setLeagues(next);
+  ls.set("wc26:leagues", next);
+  // Save to Firebase so other devices can sync
+  if (name) {
+    try { await setDoc(doc(db, "userProfiles", name), { leagues: next }, { merge: true }); } catch { }
+  }
+};
 
-  const createLeague = async lname => {
-    const code = genCode();
-    const meta = { code, name: lname, owner: name, created: Date.now() };
-    await setDoc(doc(db, "leagues", code), {
-      ...meta, members: [{ name, joined: Date.now() }],
-      matches: buildInitialMatches(), results: {}, comments: {}, adjustments: {},
-    });
-    saveLeagues([...leagues, meta]);
-    showToast(`League created! Code: ${code}`);
-    return code;
-  };
-
-  const joinLeague = async raw => {
-    const code = raw.trim().toUpperCase();
-    const snap = await getDoc(doc(db, "leagues", code));
-    if (!snap.exists()) { showToast("League not found"); return false; }
-    const d = snap.data();
-    if (leagues.some(l => l.code === code)) { setActive(code); setScreen("league"); return true; }
-    const members = d.members || [];
-    if (!members.some(m => m.name === name)) {
-      await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
+const saveName = async () => {
+  const n = nameInput.trim();
+  if (!n) return;
+  setName(n);
+  ls.set("wc26:name", n);
+  // Load existing leagues from Firebase cloud profile
+  try {
+    const snap = await getDoc(doc(db, "userProfiles", n));
+    if (snap.exists()) {
+      const cloudLeagues = snap.data().leagues || [];
+      setLeagues(cloudLeagues);
+      ls.set("wc26:leagues", cloudLeagues);
     }
-    saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
-    showToast(`Joined ${d.name}!`);
-    return true;
-  };
+  } catch { }
+  setScreen("lobby");
+};
 
-  const removeLeague = async (league, me) => {
-    if (league.owner === me) {
-      await deleteDoc(doc(db, "leagues", league.code));
-    } else {
-      const s = await getDoc(doc(db, "leagues", league.code));
-      if (s.exists()) {
-        const members = (s.data().members || []).filter(m => m.name !== me);
-        await updateDoc(doc(db, "leagues", league.code), { members });
-      }
+const createLeague = async lname => {
+  const code = genCode();
+  const meta = { code, name: lname, owner: name, created: Date.now() };
+  await setDoc(doc(db, "leagues", code), {
+    ...meta, members: [{ name, joined: Date.now() }],
+    matches: buildInitialMatches(), results: {}, comments: {}, adjustments: {},
+  });
+  saveLeagues([...leagues, meta]);
+  showToast(`League created! Code: ${code}`);
+  return code;
+};
+
+const joinLeague = async raw => {
+  const code = raw.trim().toUpperCase();
+  const snap = await getDoc(doc(db, "leagues", code));
+  if (!snap.exists()) { showToast("League not found"); return false; }
+  const d = snap.data();
+  if (leagues.some(l => l.code === code)) { setActive(code); setScreen("league"); return true; }
+  const members = d.members || [];
+  if (!members.some(m => m.name === name)) {
+    await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
+  }
+  saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
+  showToast(`Joined ${d.name}!`);
+  return true;
+};
+
+const removeLeague = async (league, me) => {
+  if (league.owner === me) {
+    await deleteDoc(doc(db, "leagues", league.code));
+  } else {
+    const s = await getDoc(doc(db, "leagues", league.code));
+    if (s.exists()) {
+      const members = (s.data().members || []).filter(m => m.name !== me);
+      await updateDoc(doc(db, "leagues", league.code), { members });
     }
-    saveLeagues(leagues.filter(l => l.code !== league.code));
-  };
+  }
+  saveLeagues(leagues.filter(l => l.code !== league.code));
+};
 
-  if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>;
+if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>;
 
-  return (
-    <ThemeCtx.Provider value={{ light, cls }}>
-      <div className={cls("min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white", "min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-100 text-slate-800")}>
-        <button onClick={toggleLight} className="fixed top-3 right-3 z-50 w-9 h-9 rounded-full bg-slate-700/80 hover:bg-slate-600 flex items-center justify-center shadow-lg">
-          {light ? <Moon className="w-4 h-4 text-slate-200" /> : <Sun className="w-4 h-4 text-amber-400" />}
-        </button>
-        {toast && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold text-white">
-            {toast}
-          </div>
-        )}
-        {(!name || screen === "home") && <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} />}
-        {name && screen === "lobby" && <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague} removeLeague={removeLeague} open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />}
-        {name && screen === "league" && active && <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />}
-      </div>
-    </ThemeCtx.Provider>
-  );
+return (
+  <ThemeCtx.Provider value={{ light, cls }}>
+    <div className={cls("min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white", "min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-100 text-slate-800")}>
+      <button onClick={toggleLight} className="fixed top-3 right-3 z-50 w-9 h-9 rounded-full bg-slate-700/80 hover:bg-slate-600 flex items-center justify-center shadow-lg">
+        {light ? <Moon className="w-4 h-4 text-slate-200" /> : <Sun className="w-4 h-4 text-amber-400" />}
+      </button>
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold text-white">
+          {toast}
+        </div>
+      )}
+      {(!name || screen === "home") && <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} switchUser={switchUser} />}
+      {name && screen === "lobby" && <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague} removeLeague={removeLeague} switchUser={switchUser} open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />}
+      {name && screen === "league" && active && <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />}
+    </div>
+  </ThemeCtx.Provider>
+);
 }
 
 // ── Home ───────────────────────────────────────────────────
-function Home({ nameInput, setNameInput, saveName, name, go }) {
+function Home({ nameInput, setNameInput, saveName, name, go, switchUser }) {
   const { cls } = useTheme();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6">
@@ -281,9 +313,14 @@ function Home({ nameInput, setNameInput, saveName, name, go }) {
         <p className={cls("text-slate-400", "text-slate-500") + " text-sm mt-1"}>Predict every match · Beat your friends</p>
       </div>
       {name ? (
-        <button onClick={go} className="bg-emerald-500 hover:bg-emerald-400 transition px-8 py-3 rounded-xl font-bold flex items-center gap-2 text-white">
-          Continue as {name} <ChevronRight className="w-4 h-4" />
-        </button>
+        <div className="flex flex-col items-center gap-3">
+          <button onClick={go} className="bg-emerald-500 hover:bg-emerald-400 transition px-8 py-3 rounded-xl font-bold flex items-center gap-2 text-white">
+            Continue as {name} <ChevronRight className="w-4 h-4" />
+          </button>
+          <button onClick={switchUser} className={cls("text-slate-400 hover:text-white", "text-slate-500 hover:text-slate-800") + " text-sm transition"}>
+            Not {name}? Switch user →
+          </button>
+        </div>
       ) : (
         <div className="w-full max-w-xs">
           <label className={cls("text-slate-300", "text-slate-600") + " text-sm mb-1.5 block"}>Your display name</label>
@@ -297,7 +334,7 @@ function Home({ nameInput, setNameInput, saveName, name, go }) {
 }
 
 // ── Lobby ──────────────────────────────────────────────────
-function Lobby({ name, leagues, createLeague, joinLeague, removeLeague, open }) {
+function Lobby({ name, leagues, createLeague, joinLeague, removeLeague, switchUser, open }) {
   const { cls } = useTheme();
   const [mode, setMode] = useState(null);
   const [lname, setLname] = useState("");
@@ -313,6 +350,7 @@ function Lobby({ name, leagues, createLeague, joinLeague, removeLeague, open }) 
         <div>
           <p className={cls("text-slate-400", "text-slate-500") + " text-sm"}>Welcome,</p>
           <h2 className="text-2xl font-black">{name}</h2>
+          <button onClick={switchUser} className={cls("text-slate-500 hover:text-red-400", "text-slate-400 hover:text-red-500") + " text-xs transition mt-0.5"}>Switch user</button>
         </div>
         <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-lg text-white">{name[0]?.toUpperCase()}</div>
       </div>
