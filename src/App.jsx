@@ -130,7 +130,7 @@ function useToast() {
   return [toast, show];
 }
 function fmtKickoff(ts) {
-  return new Date(ts).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York", timeZoneName: "short" });
+  return new Date(ts).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Etc/GMT+5" }) + " EST";
 }
 
 // ============================================================
@@ -491,12 +491,12 @@ function MatchCard({ match, pred, savePred }) {
       </div>
       <div className="flex items-center gap-2">
         <div className="flex-1 text-right"><span className="font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span></div>
-        <input type="number" min="0" max="20" disabled={locked || isTBD} value={aReg}
-          onChange={e => setAReg(e.target.value)} onBlur={save}
+        <input type="text" inputMode="numeric" pattern="[0-9]*" disabled={locked || isTBD} value={aReg}
+          onChange={e => setAReg(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save}
           className="w-12 h-12 text-center bg-slate-900 border border-slate-700 rounded-lg font-bold text-lg outline-none focus:border-emerald-500 disabled:opacity-30" />
         <span className="text-slate-500 font-bold text-lg">–</span>
-        <input type="number" min="0" max="20" disabled={locked || isTBD} value={bReg}
-          onChange={e => setBReg(e.target.value)} onBlur={save}
+        <input type="text" inputMode="numeric" pattern="[0-9]*" disabled={locked || isTBD} value={bReg}
+          onChange={e => setBReg(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save}
           className="w-12 h-12 text-center bg-slate-900 border border-slate-700 rounded-lg font-bold text-lg outline-none focus:border-emerald-500 disabled:opacity-30" />
         <div className="flex-1"><span className="font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span></div>
       </div>
@@ -664,7 +664,8 @@ function ResultRow({ match, result, saveResult }) {
   };
 
   const ni = (val, set) => (
-    <input type="number" min="0" value={val} onChange={e => set(e.target.value)}
+    <input type="text" inputMode="numeric" pattern="[0-9]*" value={val}
+      onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))}
       className="w-11 h-10 text-center bg-slate-900 border border-slate-700 rounded-lg font-bold outline-none focus:border-emerald-500" />
   );
 
