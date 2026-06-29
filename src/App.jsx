@@ -195,15 +195,13 @@ export default function App() {
     const n = ls.get("wc26:name"), l = ls.get("wc26:leagues");
     if (n) setName(n);
     if (l) setLeagues(l);
-    // Sync leagues from Firebase cloud profile on load
     if (n) {
-      getDoc(doc(db, "userProfiles", n)).then(snap => {
+      getDoc(doc(db,"userProfiles",n)).then(snap => {
         if (snap.exists()) {
-          const cloudLeagues = snap.data().leagues || [];
-          setLeagues(cloudLeagues);
-          ls.set("wc26:leagues", cloudLeagues);
+          const cl = snap.data().leagues || [];
+          setLeagues(cl); ls.set("wc26:leagues", cl);
         }
-      }).catch(() => { });
+      }).catch(()=>{});
     }
     setReady(true);
   }, []);
@@ -213,90 +211,86 @@ export default function App() {
     ls.set("wc26:name", null); ls.set("wc26:leagues", []);
     setScreen("home");
   };
-  setLeagues(next);
-  ls.set("wc26:leagues", next);
-  // Save to Firebase so other devices can sync
-  if (name) {
-    try { await setDoc(doc(db, "userProfiles", name), { leagues: next }, { merge: true }); } catch { }
-  }
-};
 
-const saveName = async () => {
-  const n = nameInput.trim();
-  if (!n) return;
-  setName(n);
-  ls.set("wc26:name", n);
-  // Load existing leagues from Firebase cloud profile
-  try {
-    const snap = await getDoc(doc(db, "userProfiles", n));
-    if (snap.exists()) {
-      const cloudLeagues = snap.data().leagues || [];
-      setLeagues(cloudLeagues);
-      ls.set("wc26:leagues", cloudLeagues);
+  const saveLeagues = next => {
+    setLeagues(next);
+    ls.set("wc26:leagues", next);
+    if (name) setDoc(doc(db,"userProfiles",name),{leagues:next},{merge:true}).catch(()=>{});
+  };
+
+  const saveName = async () => {
+    const n = nameInput.trim();
+    if (!n) return;
+    setName(n); ls.set("wc26:name", n);
+    try {
+      const snap = await getDoc(doc(db,"userProfiles",n));
+      if (snap.exists()) {
+        const cl = snap.data().leagues || [];
+        setLeagues(cl); ls.set("wc26:leagues", cl);
+      }
+    } catch {}
+    setScreen("lobby");
+  };
+
+  const createLeague = async lname => {
+    const code = genCode();
+    const meta = { code, name: lname, owner: name, created: Date.now() };
+    await setDoc(doc(db, "leagues", code), {
+      ...meta, members: [{ name, joined: Date.now() }],
+      matches: buildInitialMatches(), results: {}, comments: {}, adjustments: {},
+    });
+    saveLeagues([...leagues, meta]);
+    showToast(`League created! Code: ${code}`);
+    return code;
+  };
+
+  const joinLeague = async raw => {
+    const code = raw.trim().toUpperCase();
+    const snap = await getDoc(doc(db, "leagues", code));
+    if (!snap.exists()) { showToast("League not found"); return false; }
+    const d = snap.data();
+    if (leagues.some(l => l.code === code)) { setActive(code); setScreen("league"); return true; }
+    const members = d.members || [];
+    if (!members.some(m => m.name === name)) {
+      await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
     }
-  } catch { }
-  setScreen("lobby");
-};
+    saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
+    showToast(`Joined ${d.name}!`);
+    return true;
+  };
 
-const createLeague = async lname => {
-  const code = genCode();
-  const meta = { code, name: lname, owner: name, created: Date.now() };
-  await setDoc(doc(db, "leagues", code), {
-    ...meta, members: [{ name, joined: Date.now() }],
-    matches: buildInitialMatches(), results: {}, comments: {}, adjustments: {},
-  });
-  saveLeagues([...leagues, meta]);
-  showToast(`League created! Code: ${code}`);
-  return code;
-};
-
-const joinLeague = async raw => {
-  const code = raw.trim().toUpperCase();
-  const snap = await getDoc(doc(db, "leagues", code));
-  if (!snap.exists()) { showToast("League not found"); return false; }
-  const d = snap.data();
-  if (leagues.some(l => l.code === code)) { setActive(code); setScreen("league"); return true; }
-  const members = d.members || [];
-  if (!members.some(m => m.name === name)) {
-    await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
-  }
-  saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
-  showToast(`Joined ${d.name}!`);
-  return true;
-};
-
-const removeLeague = async (league, me) => {
-  if (league.owner === me) {
-    await deleteDoc(doc(db, "leagues", league.code));
-  } else {
-    const s = await getDoc(doc(db, "leagues", league.code));
-    if (s.exists()) {
-      const members = (s.data().members || []).filter(m => m.name !== me);
-      await updateDoc(doc(db, "leagues", league.code), { members });
+  const removeLeague = async (league, me) => {
+    if (league.owner === me) {
+      await deleteDoc(doc(db, "leagues", league.code));
+    } else {
+      const s = await getDoc(doc(db, "leagues", league.code));
+      if (s.exists()) {
+        const members = (s.data().members || []).filter(m => m.name !== me);
+        await updateDoc(doc(db, "leagues", league.code), { members });
+      }
     }
-  }
-  saveLeagues(leagues.filter(l => l.code !== league.code));
-};
+    saveLeagues(leagues.filter(l => l.code !== league.code));
+  };
 
-if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>;
+  if (!ready) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading…</div>;
 
-return (
-  <ThemeCtx.Provider value={{ light, cls }}>
-    <div className={cls("min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white", "min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-100 text-slate-800")}>
-      <button onClick={toggleLight} className="fixed top-3 right-3 z-50 w-9 h-9 rounded-full bg-slate-700/80 hover:bg-slate-600 flex items-center justify-center shadow-lg">
-        {light ? <Moon className="w-4 h-4 text-slate-200" /> : <Sun className="w-4 h-4 text-amber-400" />}
-      </button>
-      {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold text-white">
-          {toast}
-        </div>
-      )}
-      {(!name || screen === "home") && <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} switchUser={switchUser} />}
-      {name && screen === "lobby" && <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague} removeLeague={removeLeague} switchUser={switchUser} open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />}
-      {name && screen === "league" && active && <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />}
-    </div>
-  </ThemeCtx.Provider>
-);
+  return (
+    <ThemeCtx.Provider value={{ light, cls }}>
+      <div className={cls("min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white", "min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-100 text-slate-800")}>
+        <button onClick={toggleLight} className="fixed top-3 right-3 z-50 w-9 h-9 rounded-full bg-slate-700/80 hover:bg-slate-600 flex items-center justify-center shadow-lg">
+          {light ? <Moon className="w-4 h-4 text-slate-200" /> : <Sun className="w-4 h-4 text-amber-400" />}
+        </button>
+        {toast && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 px-4 py-2 rounded-xl shadow-xl text-sm font-semibold text-white">
+            {toast}
+          </div>
+        )}
+        {(!name || screen === "home") && <Home nameInput={nameInput} setNameInput={setNameInput} saveName={saveName} name={name} go={() => setScreen("lobby")} switchUser={switchUser} />}
+        {name && screen === "lobby" && <Lobby name={name} leagues={leagues} createLeague={createLeague} joinLeague={joinLeague} removeLeague={removeLeague} switchUser={switchUser} open={c => { setActive(c); setTab("matches"); setScreen("league"); }} />}
+        {name && screen === "league" && active && <League code={active} me={name} back={() => setScreen("lobby")} tab={tab} setTab={setTab} showToast={showToast} />}
+      </div>
+    </ThemeCtx.Provider>
+  );
 }
 
 // ── Home ───────────────────────────────────────────────────
@@ -317,7 +311,7 @@ function Home({ nameInput, setNameInput, saveName, name, go, switchUser }) {
           <button onClick={go} className="bg-emerald-500 hover:bg-emerald-400 transition px-8 py-3 rounded-xl font-bold flex items-center gap-2 text-white">
             Continue as {name} <ChevronRight className="w-4 h-4" />
           </button>
-          <button onClick={switchUser} className={cls("text-slate-400 hover:text-white", "text-slate-500 hover:text-slate-800") + " text-sm transition"}>
+          <button onClick={switchUser} className="text-slate-400 hover:text-white text-sm transition">
             Not {name}? Switch user →
           </button>
         </div>
@@ -350,7 +344,7 @@ function Lobby({ name, leagues, createLeague, joinLeague, removeLeague, switchUs
         <div>
           <p className={cls("text-slate-400", "text-slate-500") + " text-sm"}>Welcome,</p>
           <h2 className="text-2xl font-black">{name}</h2>
-          <button onClick={switchUser} className={cls("text-slate-500 hover:text-red-400", "text-slate-400 hover:text-red-500") + " text-xs transition mt-0.5"}>Switch user</button>
+          <button onClick={switchUser} className="text-xs text-slate-500 hover:text-red-400 transition">Switch user</button>
         </div>
         <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-lg text-white">{name[0]?.toUpperCase()}</div>
       </div>
@@ -674,9 +668,7 @@ function MatchCard({ match, pred, savePred }) {
     return `${h}h ${Math.floor((d % 3600000) / 60000)}m`;
   };
 
-  const regCls = cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40";
-  const smlCls = cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40";
-  if(false) (
+  const ScoreInput = ({ val, set }) => (
     <input type="text" inputMode="numeric" disabled={locked || isTBD} value={val}
       onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save}
       className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40"} />
@@ -711,9 +703,9 @@ function MatchCard({ match, pred, savePred }) {
       {/* Score */}
       <div className="flex items-center gap-2 px-4 py-3">
         <div className="flex-1 text-right"><span className="font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span></div>
-        <input type="text" inputMode="numeric" disabled={locked||isTBD} value={aReg} onChange={e=>setAReg(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={regCls}/>
+        <input type="text" inputMode="numeric" disabled={locked||isTBD} value={aReg} onChange={e=>setAReg(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40"}/>
         <span className={cls("text-slate-500", "text-slate-400") + " font-bold text-lg"}>–</span>
-        <input type="text" inputMode="numeric" disabled={locked||isTBD} value={bReg} onChange={e=>setBReg(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={regCls}/>
+        <input type="text" inputMode="numeric" disabled={locked||isTBD} value={bReg} onChange={e=>setBReg(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40"}/>
         <div className="flex-1"><span className="font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span></div>
       </div>
 
@@ -746,9 +738,9 @@ function MatchCard({ match, pred, savePred }) {
             </label>
             {predET && (
               <div className="flex items-center gap-2 pl-5">
-                <SmallInput val={aET} set={setAET} />
+                <input type="text" inputMode="numeric" disabled={locked} value={aET} onChange={e=>setAET(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"}/>
                 <span className={cls("text-slate-500", "text-slate-400")}>–</span>
-                <SmallInput val={bET} set={setBET} />
+                <input type="text" inputMode="numeric" disabled={locked} value={bET} onChange={e=>setBET(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"}/>
                 <span className={cls("text-slate-500", "text-slate-400") + " text-[10px]"}>cumulative after ET</span>
               </div>
             )}
@@ -764,9 +756,9 @@ function MatchCard({ match, pred, savePred }) {
             </label>
             {predPens && (
               <div className="flex items-center gap-2 pl-5">
-                <SmallInput val={pensA} set={setPensA} />
+                <input type="text" inputMode="numeric" disabled={locked} value={pensA} onChange={e=>setPensA(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"}/>
                 <span className={cls("text-slate-500", "text-slate-400")}>–</span>
-                <SmallInput val={pensB} set={setPensB} />
+                <input type="text" inputMode="numeric" disabled={locked} value={pensB} onChange={e=>setPensB(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"}/>
                 <span className={cls("text-slate-500", "text-slate-400") + " text-[10px]"}>shootout score</span>
               </div>
             )}
