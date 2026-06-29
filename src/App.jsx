@@ -674,7 +674,9 @@ function MatchCard({ match, pred, savePred }) {
     return `${h}h ${Math.floor((d % 3600000) / 60000)}m`;
   };
 
-  const ScoreInput = ({ val, set }) => (
+  const regCls = cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40";
+  const smlCls = cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40";
+  if(false) (
     <input type="text" inputMode="numeric" disabled={locked || isTBD} value={val}
       onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save}
       className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40"} />
@@ -709,9 +711,9 @@ function MatchCard({ match, pred, savePred }) {
       {/* Score */}
       <div className="flex items-center gap-2 px-4 py-3">
         <div className="flex-1 text-right"><span className="font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span></div>
-        <ScoreInput val={aReg} set={setAReg} />
+        <input type="text" inputMode="numeric" disabled={locked||isTBD} value={aReg} onChange={e=>setAReg(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={regCls}/>
         <span className={cls("text-slate-500", "text-slate-400") + " font-bold text-lg"}>–</span>
-        <ScoreInput val={bReg} set={setBReg} />
+        <input type="text" inputMode="numeric" disabled={locked||isTBD} value={bReg} onChange={e=>setBReg(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={regCls}/>
         <div className="flex-1"><span className="font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span></div>
       </div>
 
