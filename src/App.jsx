@@ -239,7 +239,9 @@ export default function App() {
       ...meta, members: [{ name, joined: Date.now() }],
       matches: buildInitialMatches(), results: {}, comments: {}, adjustments: {},
     });
-    saveLeagues([...leagues, meta]);
+    const newLeagues = [...leagues, meta];
+    saveLeagues(newLeagues);
+    setDoc(doc(db,"userProfiles",name),{leagues:newLeagues},{merge:true}).catch(()=>{});
     showToast(`League created! Code: ${code}`);
     return code;
   };
@@ -254,7 +256,9 @@ export default function App() {
     if (!members.some(m => m.name === name)) {
       await updateDoc(doc(db, "leagues", code), { members: [...members, { name, joined: Date.now() }] });
     }
-    saveLeagues([...leagues, { code, name: d.name, owner: d.owner }]);
+    const jLeagues = [...leagues, { code, name: d.name, owner: d.owner }];
+    saveLeagues(jLeagues);
+    setDoc(doc(db,"userProfiles",name),{leagues:jLeagues},{merge:true}).catch(()=>{});
     showToast(`Joined ${d.name}!`);
     return true;
   };
