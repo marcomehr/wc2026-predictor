@@ -196,10 +196,20 @@ export default function App() {
     if (n) setName(n);
     if (l) setLeagues(l);
     if (n) {
+      // First upload existing localStorage leagues to Firebase (one-time sync)
+      if (l && l.length > 0) {
+        setDoc(doc(db,"userProfiles",n),{leagues:l},{merge:true}).catch(()=>{});
+      }
+      // Then load from Firebase (may have more leagues from other devices)
       getDoc(doc(db,"userProfiles",n)).then(snap => {
         if (snap.exists()) {
           const cl = snap.data().leagues || [];
-          setLeagues(cl); ls.set("wc26:leagues", cl);
+          // Merge both lists, avoid duplicates by code
+          const merged = [...(l||[])];
+          cl.forEach(fl => { if (!merged.some(ml => ml.code === fl.code)) merged.push(fl); });
+          setLeagues(merged);
+          ls.set("wc26:leagues", merged);
+          setDoc(doc(db,"userProfiles",n),{leagues:merged},{merge:true}).catch(()=>{});
         }
       }).catch(()=>{});
     }
