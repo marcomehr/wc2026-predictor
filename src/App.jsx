@@ -12,7 +12,16 @@ const ThemeCtx = createContext({ light: false, cls: (d) => d });
 const useTheme = () => useContext(ThemeCtx);
 
 // ── Scoring ────────────────────────────────────────────────
-const SCORING = { exactReg: 10, gdReg: 7, winner: 5, etExact: 5, etGd: 2, pensWinner: 3, pensExact: 3, champion: 15, finalists: 8 };
+// Three independent stages, each scored only when the match actually reaches that stage:
+//  1) Regulation  — always scored
+//  2) Extra Time  — only scored if result.hadET is true (goals counted are ET-only, not cumulative)
+//  3) Penalties   — only scored if result.hadPens is true (winner pick only, no score, no tie)
+const SCORING = {
+  exactReg: 10, gdReg: 7, winner: 5,
+  etExact: 3, etGd: 2, etWinner: 1,
+  pensWinner: 2,
+  champion: 15, finalists: 8,
+};
 
 // ── Rounds ─────────────────────────────────────────────────
 const ROUNDS = [
@@ -57,64 +66,85 @@ const ALL_TEAMS = [
 function buildInitialMatches() {
   const t = s => new Date(s).getTime();
   return [
-    { id:"M73",  round:"R32", slot:0,  teamA:"South Africa", teamB:"Canada",         kickoff:t("2026-06-28T19:00:00Z"), venue:"Los Angeles" },
-    { id:"M74",  round:"R32", slot:1,  teamA:"Brazil",       teamB:"Japan",          kickoff:t("2026-06-29T17:00:00Z"), venue:"Houston" },
-    { id:"M75",  round:"R32", slot:2,  teamA:"Germany",      teamB:"Paraguay",       kickoff:t("2026-06-29T20:30:00Z"), venue:"Boston" },
-    { id:"M76",  round:"R32", slot:3,  teamA:"Netherlands",  teamB:"Morocco",        kickoff:t("2026-06-30T01:00:00Z"), venue:"Monterrey" },
-    { id:"M77",  round:"R32", slot:4,  teamA:"France",       teamB:"Sweden",         kickoff:t("2026-06-30T21:00:00Z"), venue:"New York NJ" },
-    { id:"M78",  round:"R32", slot:5,  teamA:"Ivory Coast",  teamB:"Norway",         kickoff:t("2026-06-30T17:00:00Z"), venue:"Dallas" },
-    { id:"M79",  round:"R32", slot:6,  teamA:"Mexico",       teamB:"Ecuador",        kickoff:t("2026-07-01T01:00:00Z"), venue:"Mexico City" },
-    { id:"M80",  round:"R32", slot:7,  teamA:"England",      teamB:"DR Congo",       kickoff:t("2026-07-01T16:00:00Z"), venue:"Atlanta" },
-    { id:"M81",  round:"R32", slot:8,  teamA:"USA",          teamB:"Bosnia & Herz.", kickoff:t("2026-07-01T21:00:00Z"), venue:"San Francisco" },
-    { id:"M82",  round:"R32", slot:9,  teamA:"Belgium",      teamB:"Senegal",        kickoff:t("2026-07-01T17:00:00Z"), venue:"Seattle" },
-    { id:"M83",  round:"R32", slot:10, teamA:"Portugal",     teamB:"Croatia",        kickoff:t("2026-07-02T23:00:00Z"), venue:"Toronto" },
-    { id:"M84",  round:"R32", slot:11, teamA:"Spain",        teamB:"Austria",        kickoff:t("2026-07-02T16:00:00Z"), venue:"Los Angeles" },
-    { id:"M85",  round:"R32", slot:12, teamA:"Switzerland",  teamB:"Algeria",        kickoff:t("2026-07-03T00:00:00Z"), venue:"Vancouver" },
-    { id:"M86",  round:"R32", slot:13, teamA:"Argentina",    teamB:"Cape Verde",     kickoff:t("2026-07-03T22:00:00Z"), venue:"Miami" },
-    { id:"M87",  round:"R32", slot:14, teamA:"Colombia",     teamB:"Ghana",          kickoff:t("2026-07-04T01:30:00Z"), venue:"Kansas City" },
-    { id:"M88",  round:"R32", slot:15, teamA:"Australia",    teamB:"Egypt",          kickoff:t("2026-07-03T18:00:00Z"), venue:"Dallas" },
-    { id:"M89",  round:"R16", slot:0,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-04T21:00:00Z"), venue:"Philadelphia" },
-    { id:"M90",  round:"R16", slot:1,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-04T17:00:00Z"), venue:"Houston" },
-    { id:"M91",  round:"R16", slot:2,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-05T20:00:00Z"), venue:"New York NJ" },
-    { id:"M92",  round:"R16", slot:3,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-06T00:00:00Z"), venue:"Mexico City" },
-    { id:"M93",  round:"R16", slot:4,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-06T19:00:00Z"), venue:"Dallas" },
-    { id:"M94",  round:"R16", slot:5,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-07T00:00:00Z"), venue:"Seattle" },
-    { id:"M95",  round:"R16", slot:6,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-07T16:00:00Z"), venue:"Atlanta" },
-    { id:"M96",  round:"R16", slot:7,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-07T20:00:00Z"), venue:"Vancouver" },
-    { id:"M97",  round:"QF",  slot:0,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-09T20:00:00Z"), venue:"Boston" },
-    { id:"M98",  round:"QF",  slot:1,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-10T19:00:00Z"), venue:"Los Angeles" },
-    { id:"M99",  round:"QF",  slot:2,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-11T21:00:00Z"), venue:"Miami" },
-    { id:"M100", round:"QF",  slot:3,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-12T01:00:00Z"), venue:"Kansas City" },
-    { id:"M101", round:"SF",  slot:0,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-14T19:00:00Z"), venue:"Dallas" },
-    { id:"M102", round:"SF",  slot:1,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-15T19:00:00Z"), venue:"Atlanta" },
-    { id:"M103", round:"3RD", slot:0,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-18T21:00:00Z"), venue:"Miami" },
-    { id:"M104", round:"F",   slot:0,  teamA:"TBD", teamB:"TBD", kickoff:t("2026-07-19T19:00:00Z"), venue:"New York NJ" },
+    { id: "M73", round: "R32", slot: 0, teamA: "South Africa", teamB: "Canada", kickoff: t("2026-06-28T19:00:00Z"), venue: "Los Angeles" },
+    { id: "M74", round: "R32", slot: 1, teamA: "Brazil", teamB: "Japan", kickoff: t("2026-06-29T17:00:00Z"), venue: "Houston" },
+    { id: "M75", round: "R32", slot: 2, teamA: "Germany", teamB: "Paraguay", kickoff: t("2026-06-29T20:30:00Z"), venue: "Boston" },
+    { id: "M76", round: "R32", slot: 3, teamA: "Netherlands", teamB: "Morocco", kickoff: t("2026-06-30T01:00:00Z"), venue: "Monterrey" },
+    { id: "M77", round: "R32", slot: 4, teamA: "France", teamB: "Sweden", kickoff: t("2026-06-30T21:00:00Z"), venue: "New York NJ" },
+    { id: "M78", round: "R32", slot: 5, teamA: "Ivory Coast", teamB: "Norway", kickoff: t("2026-06-30T17:00:00Z"), venue: "Dallas" },
+    { id: "M79", round: "R32", slot: 6, teamA: "Mexico", teamB: "Ecuador", kickoff: t("2026-07-01T01:00:00Z"), venue: "Mexico City" },
+    { id: "M80", round: "R32", slot: 7, teamA: "England", teamB: "DR Congo", kickoff: t("2026-07-01T16:00:00Z"), venue: "Atlanta" },
+    { id: "M81", round: "R32", slot: 8, teamA: "USA", teamB: "Bosnia & Herz.", kickoff: t("2026-07-01T21:00:00Z"), venue: "San Francisco" },
+    { id: "M82", round: "R32", slot: 9, teamA: "Belgium", teamB: "Senegal", kickoff: t("2026-07-01T17:00:00Z"), venue: "Seattle" },
+    { id: "M83", round: "R32", slot: 10, teamA: "Portugal", teamB: "Croatia", kickoff: t("2026-07-02T23:00:00Z"), venue: "Toronto" },
+    { id: "M84", round: "R32", slot: 11, teamA: "Spain", teamB: "Austria", kickoff: t("2026-07-02T16:00:00Z"), venue: "Los Angeles" },
+    { id: "M85", round: "R32", slot: 12, teamA: "Switzerland", teamB: "Algeria", kickoff: t("2026-07-03T00:00:00Z"), venue: "Vancouver" },
+    { id: "M86", round: "R32", slot: 13, teamA: "Argentina", teamB: "Cape Verde", kickoff: t("2026-07-03T22:00:00Z"), venue: "Miami" },
+    { id: "M87", round: "R32", slot: 14, teamA: "Colombia", teamB: "Ghana", kickoff: t("2026-07-04T01:30:00Z"), venue: "Kansas City" },
+    { id: "M88", round: "R32", slot: 15, teamA: "Australia", teamB: "Egypt", kickoff: t("2026-07-03T18:00:00Z"), venue: "Dallas" },
+    { id: "M89", round: "R16", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-04T21:00:00Z"), venue: "Philadelphia" },
+    { id: "M90", round: "R16", slot: 1, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-04T17:00:00Z"), venue: "Houston" },
+    { id: "M91", round: "R16", slot: 2, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-05T20:00:00Z"), venue: "New York NJ" },
+    { id: "M92", round: "R16", slot: 3, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-06T00:00:00Z"), venue: "Mexico City" },
+    { id: "M93", round: "R16", slot: 4, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-06T19:00:00Z"), venue: "Dallas" },
+    { id: "M94", round: "R16", slot: 5, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-07T00:00:00Z"), venue: "Seattle" },
+    { id: "M95", round: "R16", slot: 6, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-07T16:00:00Z"), venue: "Atlanta" },
+    { id: "M96", round: "R16", slot: 7, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-07T20:00:00Z"), venue: "Vancouver" },
+    { id: "M97", round: "QF", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-09T20:00:00Z"), venue: "Boston" },
+    { id: "M98", round: "QF", slot: 1, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-10T19:00:00Z"), venue: "Los Angeles" },
+    { id: "M99", round: "QF", slot: 2, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-11T21:00:00Z"), venue: "Miami" },
+    { id: "M100", round: "QF", slot: 3, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-12T01:00:00Z"), venue: "Kansas City" },
+    { id: "M101", round: "SF", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-14T19:00:00Z"), venue: "Dallas" },
+    { id: "M102", round: "SF", slot: 1, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-15T19:00:00Z"), venue: "Atlanta" },
+    { id: "M103", round: "3RD", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-18T21:00:00Z"), venue: "Miami" },
+    { id: "M104", round: "F", slot: 0, teamA: "TBD", teamB: "TBD", kickoff: t("2026-07-19T19:00:00Z"), venue: "New York NJ" },
   ];
 }
 
 // ── Utilities ──────────────────────────────────────────────
 const isLive = m => { const n = Date.now(); return n >= m.kickoff && n <= m.kickoff + 7200000; };
 
+// Outcome of a score pair: "A" win, "B" win, or "T" tie. Returns null if either side is blank.
+function outcomeOf(a, b) {
+  if (a === "" || b === "" || a == null || b == null) return null;
+  const na = Number(a), nb = Number(b);
+  if (na > nb) return "A";
+  if (na < nb) return "B";
+  return "T";
+}
+
+// Scores a single match prediction against its result. Each stage (Reg / ET / Pens) is independent:
+// Reg is always scored. ET only scores if the match actually went to ET. Pens only scores if it
+// actually went to penalties. Within a scored stage: exact score > matching goal difference > matching
+// outcome (win/tie/win) — ties count as a valid outcome on their own, same as the original game logic.
 function scoreMatch(pred, result) {
   if (!pred || !result || result.aReg == null) return null;
   let pts = 0;
   const detail = [];
-  const pA = pred.aReg, pB = pred.bReg, rA = result.aReg, rB = result.bReg;
-  const exact = pA === rA && pB === rB;
-  const pD = pA - pB, rD = rA - rB;
-  if (exact) { pts += SCORING.exactReg; detail.push(["Exact", SCORING.exactReg]); }
-  else if (pD === rD) { pts += SCORING.gdReg; detail.push(["Goal diff", SCORING.gdReg]); }
-  else if ((pred.advance && pred.advance === result.advance) || (Math.sign(pD) === Math.sign(rD) && rD !== 0)) {
-    pts += SCORING.winner; detail.push(["Advances", SCORING.winner]);
+  let exact = false;
+
+  // 1) Regulation
+  if (pred.aReg != null && pred.bReg != null) {
+    const pA = pred.aReg, pB = pred.bReg, rA = result.aReg, rB = result.bReg;
+    const pD = pA - pB, rD = rA - rB;
+    if (pA === rA && pB === rB) { pts += SCORING.exactReg; detail.push(["Reg: Exact", SCORING.exactReg]); exact = true; }
+    else if (pD === rD) { pts += SCORING.gdReg; detail.push(["Reg: Goal diff", SCORING.gdReg]); }
+    else if (Math.sign(pD) === Math.sign(rD)) { pts += SCORING.winner; detail.push(["Reg: Outcome", SCORING.winner]); }
   }
-  if (result.hadET && pred.aET != null && result.aET != null) {
-    if (pred.aET === result.aET && pred.bET === result.bET) { pts += SCORING.etExact; detail.push(["ET exact", SCORING.etExact]); }
-    else if ((pred.aET - pred.bET) === (result.aET - result.bET)) { pts += SCORING.etGd; detail.push(["ET diff", SCORING.etGd]); }
+
+  // 2) Extra Time — goals scored DURING ET only, and only counts if the match actually went to ET
+  if (result.hadET && pred.etA != null && pred.etB != null && result.etA != null && result.etB != null) {
+    const pD = pred.etA - pred.etB, rD = result.etA - result.etB;
+    if (pred.etA === result.etA && pred.etB === result.etB) { pts += SCORING.etExact; detail.push(["ET: Exact", SCORING.etExact]); }
+    else if (pD === rD) { pts += SCORING.etGd; detail.push(["ET: Goal diff", SCORING.etGd]); }
+    else if (Math.sign(pD) === Math.sign(rD)) { pts += SCORING.etWinner; detail.push(["ET: Outcome", SCORING.etWinner]); }
   }
-  if (result.hadPens) {
-    if (pred.advance && pred.advance === result.advance) { pts += SCORING.pensWinner; detail.push(["Pen win", SCORING.pensWinner]); }
-    if (pred.pensA != null && pred.pensA === result.pensA && pred.pensB === result.pensB) { pts += SCORING.pensExact; detail.push(["Pen exact", SCORING.pensExact]); }
+
+  // 3) Penalties — winner pick only, only counts if the match actually went to penalties
+  if (result.hadPens && pred.pensWinner && result.pensWinner && pred.pensWinner === result.pensWinner) {
+    pts += SCORING.pensWinner; detail.push(["Pens: Winner", SCORING.pensWinner]);
   }
+
   return { pts, detail, exact };
 }
 
@@ -128,7 +158,7 @@ function computeTotal(preds, bonus, matches, results, adj = 0) {
       total += s.pts;
       byRound[m.round] = (byRound[m.round] || 0) + s.pts;
       if (s.exact) exacts++;
-      if (s.detail.some(d => d[0].includes("Adv"))) advances++;
+      if (s.detail.some(d => d[0].includes("Outcome"))) advances++;
     }
   });
   if (bonus?.locked && results.__final) {
@@ -198,20 +228,20 @@ export default function App() {
     if (n) {
       // First upload existing localStorage leagues to Firebase (one-time sync)
       if (l && l.length > 0) {
-        setDoc(doc(db,"userProfiles",n),{leagues:l},{merge:true}).catch(()=>{});
+        setDoc(doc(db, "userProfiles", n), { leagues: l }, { merge: true }).catch(() => { });
       }
       // Then load from Firebase (may have more leagues from other devices)
-      getDoc(doc(db,"userProfiles",n)).then(snap => {
+      getDoc(doc(db, "userProfiles", n)).then(snap => {
         if (snap.exists()) {
           const cl = snap.data().leagues || [];
           // Merge both lists, avoid duplicates by code
-          const merged = [...(l||[])];
+          const merged = [...(l || [])];
           cl.forEach(fl => { if (!merged.some(ml => ml.code === fl.code)) merged.push(fl); });
           setLeagues(merged);
           ls.set("wc26:leagues", merged);
-          setDoc(doc(db,"userProfiles",n),{leagues:merged},{merge:true}).catch(()=>{});
+          setDoc(doc(db, "userProfiles", n), { leagues: merged }, { merge: true }).catch(() => { });
         }
-      }).catch(()=>{});
+      }).catch(() => { });
     }
     setReady(true);
   }, []);
@@ -225,7 +255,7 @@ export default function App() {
   const saveLeagues = next => {
     setLeagues(next);
     ls.set("wc26:leagues", next);
-    if (name) setDoc(doc(db,"userProfiles",name),{leagues:next},{merge:true}).catch(()=>{});
+    if (name) setDoc(doc(db, "userProfiles", name), { leagues: next }, { merge: true }).catch(() => { });
   };
 
   const saveName = async () => {
@@ -233,12 +263,12 @@ export default function App() {
     if (!n) return;
     setName(n); ls.set("wc26:name", n);
     try {
-      const snap = await getDoc(doc(db,"userProfiles",n));
+      const snap = await getDoc(doc(db, "userProfiles", n));
       if (snap.exists()) {
         const cl = snap.data().leagues || [];
         setLeagues(cl); ls.set("wc26:leagues", cl);
       }
-    } catch {}
+    } catch { }
     setScreen("lobby");
   };
 
@@ -251,7 +281,7 @@ export default function App() {
     });
     const newLeagues = [...leagues, meta];
     saveLeagues(newLeagues);
-    setDoc(doc(db,"userProfiles",name),{leagues:newLeagues},{merge:true}).catch(()=>{});
+    setDoc(doc(db, "userProfiles", name), { leagues: newLeagues }, { merge: true }).catch(() => { });
     showToast(`League created! Code: ${code}`);
     return code;
   };
@@ -268,7 +298,7 @@ export default function App() {
     }
     const jLeagues = [...leagues, { code, name: d.name, owner: d.owner }];
     saveLeagues(jLeagues);
-    setDoc(doc(db,"userProfiles",name),{leagues:jLeagues},{merge:true}).catch(()=>{});
+    setDoc(doc(db, "userProfiles", name), { leagues: jLeagues }, { merge: true }).catch(() => { });
     showToast(`Joined ${d.name}!`);
     return true;
   };
@@ -639,6 +669,27 @@ function BonusCard({ myBonus, saveBonus }) {
   );
 }
 
+// ── Outcome Badges (locked, display-only) ─────────────────
+// Shows Team A Win / Tie / Team B Win, auto-highlighting whichever the entered score implies.
+// Never clickable — it exists purely to show the user what their score prediction means.
+function OutcomeBadges({ cls, teamA, teamB, outcome, compact }) {
+  const items = [["A", `${FLAGS[teamA]} ${teamA}`], ["T", "Tie"], ["B", `${teamB} ${FLAGS[teamB]}`]];
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {items.map(([key, label]) => (
+        <div key={key}
+          className={(compact ? "py-1 text-[10px]" : "py-1.5 text-[11px]") +
+            ` rounded-lg font-bold text-center border pointer-events-none select-none ${outcome === key
+              ? "bg-emerald-500/90 border-emerald-400 text-white"
+              : cls("border-slate-700 bg-slate-900/40 text-slate-500", "border-slate-200 bg-slate-50 text-slate-400")
+            }`}>
+          {label}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Match Card ─────────────────────────────────────────────
 function MatchCard({ match, pred, savePred }) {
   const { cls } = useTheme();
@@ -649,30 +700,28 @@ function MatchCard({ match, pred, savePred }) {
 
   const [aReg, setAReg] = useState(pred?.aReg ?? "");
   const [bReg, setBReg] = useState(pred?.bReg ?? "");
-  const [advance, setAdvance] = useState(pred?.advance ?? "");
-  const [predET, setPredET] = useState(pred?.aET != null);
-  const [aET, setAET] = useState(pred?.aET ?? "");
-  const [bET, setBET] = useState(pred?.bET ?? "");
-  const [predPens, setPredPens] = useState(pred?.pensA != null);
-  const [pensA, setPensA] = useState(pred?.pensA ?? "");
-  const [pensB, setPensB] = useState(pred?.pensB ?? "");
+  const [etA, setEtA] = useState(pred?.etA ?? "");
+  const [etB, setEtB] = useState(pred?.etB ?? "");
+  const [pensWinner, setPensWinner] = useState(pred?.pensWinner ?? "");
 
-  const draw = aReg !== "" && bReg !== "" && Number(aReg) === Number(bReg);
-  const autoAdv = aReg !== "" && bReg !== "" && !draw ? (Number(aReg) > Number(bReg) ? match.teamA : match.teamB) : null;
-  const effAdv = advance || autoAdv || "";
+  const regOutcome = outcomeOf(aReg, bReg);
+  const etOutcome = outcomeOf(etA, etB);
 
   const cA = TEAM_COLOR[match.teamA], cB = TEAM_COLOR[match.teamB];
   const bgStyle = cA && cB && !isTBD ? { background: `linear-gradient(135deg,${cA}18,transparent 50%,${cB}18)` } : {};
 
-  const buildPred = (adv = effAdv) => {
-    const p = { aReg: Number(aReg), bReg: Number(bReg), advance: adv };
-    if (predET && aET !== "" && bET !== "") { p.aET = Number(aET); p.bET = Number(bET); }
-    if (predPens && pensA !== "" && pensB !== "") { p.pensA = Number(pensA); p.pensB = Number(pensB); }
+  const buildPred = () => {
+    const p = { aReg: Number(aReg), bReg: Number(bReg) };
+    if (etA !== "" && etB !== "") { p.etA = Number(etA); p.etB = Number(etB); }
+    if (pensWinner) p.pensWinner = pensWinner;
     return p;
   };
 
   const save = () => { if (aReg === "" || bReg === "") return; savePred(match.id, buildPred()); };
-  const pickAdv = t => { setAdvance(t); if (aReg !== "" && bReg !== "") savePred(match.id, buildPred(t)); };
+  const savePens = t => {
+    setPensWinner(t);
+    if (aReg !== "" && bReg !== "") savePred(match.id, { ...buildPred(), pensWinner: t });
+  };
 
   const timeLeft = () => {
     const d = match.kickoff - now;
@@ -682,12 +731,11 @@ function MatchCard({ match, pred, savePred }) {
     return `${h}h ${Math.floor((d % 3600000) / 60000)}m`;
   };
 
-  const ScoreInput = ({ val, set }) => (
-    <input type="text" inputMode="numeric" disabled={locked || isTBD} value={val}
+  const RegInput = ({ val, set }) => (
+    <input type="text" inputMode="numeric" disabled={locked} value={val}
       onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save}
       className={cls("bg-slate-900 border-slate-700 text-white", "bg-white border-slate-300 text-slate-800") + " w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40"} />
   );
-
   const SmallInput = ({ val, set }) => (
     <input type="text" inputMode="numeric" disabled={locked} value={val}
       onChange={e => set(e.target.value.replace(/[^0-9]/g, ""))} onBlur={save}
@@ -714,82 +762,75 @@ function MatchCard({ match, pred, savePred }) {
         </div>
       </div>
 
-      {/* Score */}
-      <div className="flex items-center gap-2 px-4 py-3">
+      {/* Team names */}
+      <div className="flex items-center gap-2 px-4 pt-2 pb-1">
         <div className="flex-1 text-right"><span className="font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span></div>
-        <input type="text" inputMode="numeric" disabled={locked||isTBD} value={aReg} onChange={e=>setAReg(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40"}/>
-        <span className={cls("text-slate-500", "text-slate-400") + " font-bold text-lg"}>–</span>
-        <input type="text" inputMode="numeric" disabled={locked||isTBD} value={bReg} onChange={e=>setBReg(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-12 h-12 text-center border rounded-lg font-black text-xl outline-none focus:border-emerald-500 disabled:opacity-40"}/>
+        <span className={cls("text-slate-500", "text-slate-400") + " text-xs font-bold px-2"}>vs</span>
         <div className="flex-1"><span className="font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span></div>
       </div>
 
-      {/* Prediction sections — always shown for non-TBD */}
       {!isTBD && (
         <div className={cls("border-slate-700/60", "border-slate-200") + " border-t"}>
 
-          {/* Who advances */}
+          {/* 1. Regulation */}
           <div className="px-4 py-3">
-            <p className={cls("text-slate-400", "text-slate-500") + " text-xs font-semibold mb-2"}>Who advances?</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className={cls("text-slate-300", "text-slate-700") + " text-xs font-bold"}>1️⃣ Regulation Score</p>
+              <span className="text-emerald-400 font-bold text-[10px]">Exact {SCORING.exactReg} · Diff {SCORING.gdReg} · Outcome {SCORING.winner}</span>
+            </div>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <RegInput val={aReg} set={setAReg} />
+              <span className={cls("text-slate-500", "text-slate-400") + " font-bold text-lg"}>–</span>
+              <RegInput val={bReg} set={setBReg} />
+            </div>
+            <OutcomeBadges cls={cls} teamA={match.teamA} teamB={match.teamB} outcome={regOutcome} />
+          </div>
+
+          {/* 2. Extra Time */}
+          <div className={cls("border-slate-700/60", "border-slate-200") + " border-t px-4 py-3"}>
+            <div className="flex items-center justify-between mb-2">
+              <p className={cls("text-slate-300", "text-slate-700") + " text-xs font-bold"}>2️⃣ Extra Time <span className={cls("text-slate-500", "text-slate-400") + " font-normal"}>(goals in ET only)</span></p>
+              <span className="text-emerald-400 font-bold text-[10px]">Exact {SCORING.etExact} · Diff {SCORING.etGd} · Outcome {SCORING.etWinner}</span>
+            </div>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <SmallInput val={etA} set={setEtA} />
+              <span className={cls("text-slate-500", "text-slate-400")}>–</span>
+              <SmallInput val={etB} set={setEtB} />
+            </div>
+            <OutcomeBadges cls={cls} teamA={match.teamA} teamB={match.teamB} outcome={etOutcome} compact />
+            <p className={cls("text-slate-500", "text-slate-400") + " text-[10px] mt-1.5"}>Only scores if the match actually goes to extra time.</p>
+          </div>
+
+          {/* 3. Penalties */}
+          <div className={cls("border-slate-700/60", "border-slate-200") + " border-t px-4 py-3"}>
+            <div className="flex items-center justify-between mb-2">
+              <p className={cls("text-slate-300", "text-slate-700") + " text-xs font-bold"}>3️⃣ Penalty Shootout <span className={cls("text-slate-500", "text-slate-400") + " font-normal"}>(winner only)</span></p>
+              <span className="text-emerald-400 font-bold text-[10px]">+{SCORING.pensWinner}</span>
+            </div>
             <div className="grid grid-cols-2 gap-2">
-              <button disabled={locked} onClick={() => pickAdv(match.teamA)}
-                className={`py-2.5 rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${effAdv === match.teamA ? "bg-emerald-500 text-white" : cls("border-slate-700 bg-slate-900/60 text-slate-300", "border-slate-200 bg-slate-50 text-slate-700") + " border"}`}>
+              <button disabled={locked} onClick={() => savePens(match.teamA)}
+                className={`py-2.5 rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${pensWinner === match.teamA ? "bg-emerald-500 text-white" : cls("border-slate-700 bg-slate-900/60 text-slate-300", "border-slate-200 bg-slate-50 text-slate-700") + " border"}`}>
                 {FLAGS[match.teamA]} {match.teamA}
               </button>
-              <button disabled={locked} onClick={() => pickAdv(match.teamB)}
-                className={`py-2.5 rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${effAdv === match.teamB ? "bg-emerald-500 text-white" : cls("border-slate-700 bg-slate-900/60 text-slate-300", "border-slate-200 bg-slate-50 text-slate-700") + " border"}`}>
+              <button disabled={locked} onClick={() => savePens(match.teamB)}
+                className={`py-2.5 rounded-lg text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${pensWinner === match.teamB ? "bg-emerald-500 text-white" : cls("border-slate-700 bg-slate-900/60 text-slate-300", "border-slate-200 bg-slate-50 text-slate-700") + " border"}`}>
                 {FLAGS[match.teamB]} {match.teamB}
               </button>
             </div>
-          </div>
-
-          {/* Extra Time */}
-          <div className={cls("border-slate-700/60", "border-slate-200") + " border-t px-4 py-3"}>
-            <label className={`flex items-center gap-2 text-xs mb-2 ${locked ? "opacity-50" : "cursor-pointer"}`}>
-              <input type="checkbox" disabled={locked} checked={predET}
-                onChange={e => { setPredET(e.target.checked); if (!e.target.checked) { setAET(""); setBET(""); } }} />
-              <span className={cls("text-slate-300", "text-slate-700") + " font-medium"}>Predict Extra Time score</span>
-              <span className="ml-auto text-emerald-400 font-bold text-[10px]">+5 exact · +2 diff</span>
-            </label>
-            {predET && (
-              <div className="flex items-center gap-2 pl-5">
-                <input type="text" inputMode="numeric" disabled={locked} value={aET} onChange={e=>setAET(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"}/>
-                <span className={cls("text-slate-500", "text-slate-400")}>–</span>
-                <input type="text" inputMode="numeric" disabled={locked} value={bET} onChange={e=>setBET(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"}/>
-                <span className={cls("text-slate-500", "text-slate-400") + " text-[10px]"}>cumulative after ET</span>
-              </div>
-            )}
-          </div>
-
-          {/* Penalties */}
-          <div className={cls("border-slate-700/60", "border-slate-200") + " border-t px-4 py-3"}>
-            <label className={`flex items-center gap-2 text-xs mb-2 ${locked ? "opacity-50" : "cursor-pointer"}`}>
-              <input type="checkbox" disabled={locked} checked={predPens}
-                onChange={e => { setPredPens(e.target.checked); if (!e.target.checked) { setPensA(""); setPensB(""); } }} />
-              <span className={cls("text-slate-300", "text-slate-700") + " font-medium"}>Predict Penalty shootout</span>
-              <span className="ml-auto text-emerald-400 font-bold text-[10px]">+3 winner · +3 exact</span>
-            </label>
-            {predPens && (
-              <div className="flex items-center gap-2 pl-5">
-                <input type="text" inputMode="numeric" disabled={locked} value={pensA} onChange={e=>setPensA(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"}/>
-                <span className={cls("text-slate-500", "text-slate-400")}>–</span>
-                <input type="text" inputMode="numeric" disabled={locked} value={pensB} onChange={e=>setPensB(e.target.value.replace(/[^0-9]/g,""))} onBlur={save} className={cls("bg-slate-900 border-slate-700 text-white","bg-white border-slate-300 text-slate-800")+" w-10 h-9 text-center border rounded-lg font-bold text-sm outline-none focus:border-emerald-500 disabled:opacity-40"}/>
-                <span className={cls("text-slate-500", "text-slate-400") + " text-[10px]"}>shootout score</span>
-              </div>
-            )}
+            <p className={cls("text-slate-500", "text-slate-400") + " text-[10px] mt-1.5"}>Only scores if the match actually goes to penalties.</p>
           </div>
 
         </div>
       )}
 
       {/* Summary */}
-      <div className="px-4 pb-3 pt-1">
+      <div className="px-4 pb-3 pt-2">
         {pred && !isTBD && (
           <p className="text-[11px] text-emerald-400 flex items-center gap-1 flex-wrap">
             <Check className="w-3 h-3 shrink-0" />
-            {pred.aReg}–{pred.bReg}
-            {pred.advance ? ` · ${pred.advance} adv.` : ""}
-            {pred.aET != null ? ` · ET ${pred.aET}–${pred.bET}` : ""}
-            {pred.pensA != null ? ` · Pens ${pred.pensA}–${pred.pensB}` : ""}
+            Reg {pred.aReg}–{pred.bReg}
+            {pred.etA != null ? ` · ET ${pred.etA}–${pred.etB}` : ""}
+            {pred.pensWinner ? ` · Pens: ${pred.pensWinner}` : ""}
           </p>
         )}
         {isTBD && <p className={cls("text-slate-500", "text-slate-400") + " text-[11px]"}>Teams TBD after group stage</p>}
@@ -842,7 +883,7 @@ function PicksTab({ matches, results, members, allPreds, comments, addComment, m
                 </div>
                 {res?.advance && (
                   <p className="text-[11px] text-emerald-400 text-center mt-1.5">
-                    ✅ {FLAGS[res.advance]} {res.advance} advances{res.hadPens ? ` (pens ${res.pensA}–${res.pensB})` : res.hadET ? " (ET)" : ""}
+                    ✅ {FLAGS[res.advance]} {res.advance} advances{res.hadPens ? " (on penalties)" : res.hadET ? " (after ET)" : ""}
                   </p>
                 )}
                 {preds.length > 0 && !isTBD && (
@@ -860,29 +901,33 @@ function PicksTab({ matches, results, members, allPreds, comments, addComment, m
                   </div>
                 )}
               </div>
-              {/* Predictions */}
+              {/* Predictions — Reg / ET / Pens breakdown per player */}
               <div className={cls("divide-slate-700/30", "divide-slate-100") + " divide-y"}>
                 {members.map(member => {
                   const pred = allPreds[member.name]?.[m.id];
                   const score = res && pred ? scoreMatch(pred, res) : null;
-                  const isDraw = pred && pred.aReg === pred.bReg;
                   return (
                     <div key={member.name} className="flex items-center px-3 py-2.5 gap-3">
                       <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold text-emerald-400 shrink-0">{member.name[0]?.toUpperCase()}</div>
                       <span className="text-sm font-medium flex-1 truncate">{member.name}</span>
                       {pred ? (
-                        <div className="flex items-center gap-1.5">
-                          {score?.exact && <span title="Called it!">🔮</span>}
-                          <span className={cls("text-slate-300", "text-slate-600") + " text-sm font-mono"}>
-                            {pred.aReg}–{pred.bReg}
-                            {isDraw && pred.advance ? <span className={cls("text-slate-400", "text-slate-400") + " text-[10px] ml-1"}>({FLAGS[pred.advance]})</span> : null}
-                          </span>
-                          {score != null ? (
-                            <span className={`text-xs font-black px-2 py-0.5 rounded-full min-w-[40px] text-center ${score.pts >= SCORING.exactReg ? "bg-amber-500/30 text-amber-300" : score.pts > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700/50 text-slate-500"}`}>
-                              +{score.pts}
-                            </span>
-                          ) : (
-                            <span className={cls("text-slate-600", "text-slate-400") + " text-[11px] italic min-w-[40px] text-right"}>—</span>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            {score?.exact && <span title="Called it!">🔮</span>}
+                            <span className={cls("text-slate-300", "text-slate-600") + " text-sm font-mono"}>{pred.aReg}–{pred.bReg}</span>
+                            {score != null ? (
+                              <span className={`text-xs font-black px-2 py-0.5 rounded-full min-w-[40px] text-center ${score.pts >= SCORING.exactReg ? "bg-amber-500/30 text-amber-300" : score.pts > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700/50 text-slate-500"}`}>
+                                +{score.pts}
+                              </span>
+                            ) : (
+                              <span className={cls("text-slate-600", "text-slate-400") + " text-[11px] italic min-w-[40px] text-right"}>—</span>
+                            )}
+                          </div>
+                          {(pred.etA != null || pred.pensWinner) && (
+                            <div className={cls("text-slate-500", "text-slate-400") + " text-[10px] flex gap-2"}>
+                              {pred.etA != null && <span>ET {pred.etA}–{pred.etB}</span>}
+                              {pred.pensWinner && <span>Pens: {FLAGS[pred.pensWinner]} {pred.pensWinner}</span>}
+                            </div>
                           )}
                         </div>
                       ) : (
@@ -943,7 +988,14 @@ function StatsTab({ me, members, allPreds, allBonus, matches, results, adjustmen
     matches.forEach(m => {
       const p = preds[m.id];
       if (!p) return;
-      const w = p.aReg > p.bReg ? m.teamA : p.bReg > p.aReg ? m.teamB : p.advance;
+      let w = null;
+      if (p.aReg > p.bReg) w = m.teamA;
+      else if (p.bReg > p.aReg) w = m.teamB;
+      else if (p.etA != null && p.etB != null) {
+        if (p.etA > p.etB) w = m.teamA;
+        else if (p.etB > p.etA) w = m.teamB;
+        else if (p.pensWinner) w = p.pensWinner;
+      } else if (p.pensWinner) w = p.pensWinner;
       if (w && w !== "TBD") pickCounts[w] = (pickCounts[w] || 0) + 1;
     });
     const favTeam = Object.entries(pickCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -1084,7 +1136,7 @@ function Leaderboard({ members, allPreds, allBonus, matches, results, me, adjust
                     {r.name === me && <span className="text-[10px] bg-emerald-500 px-1.5 py-0.5 rounded font-bold text-white">You</span>}
                     {i === 0 && rows[0].total > 0 && <Crown className="w-3.5 h-3.5 text-amber-400" />}
                   </p>
-                  <p className={cls("text-slate-400", "text-slate-500") + " text-[11px]"}>{r.exacts} exact · {r.advances} advances</p>
+                  <p className={cls("text-slate-400", "text-slate-500") + " text-[11px]"}>{r.exacts} exact · {r.advances} correct outcomes</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <p className="font-black text-xl text-emerald-400">{r.total}</p>
@@ -1110,8 +1162,9 @@ function Leaderboard({ members, allPreds, allBonus, matches, results, me, adjust
       </div>
       <div className={cls("bg-slate-800/40 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-4 text-xs space-y-1.5"}>
         <p className={cls("text-slate-200", "text-slate-800") + " font-bold mb-2 flex items-center gap-1.5"}><Star className="w-3.5 h-3.5 text-amber-400" /> Scoring Guide</p>
-        <p className={cls("text-slate-400", "text-slate-500")}>Exact: <b className={cls("text-white", "text-slate-800")}>{SCORING.exactReg}</b> · Goal diff: <b className={cls("text-white", "text-slate-800")}>{SCORING.gdReg}</b> · Advances: <b className={cls("text-white", "text-slate-800")}>{SCORING.winner}</b></p>
-        <p className={cls("text-slate-400", "text-slate-500")}>ET exact: <b className={cls("text-white", "text-slate-800")}>+{SCORING.etExact}</b> · ET diff: <b className={cls("text-white", "text-slate-800")}>+{SCORING.etGd}</b> · Pen win: <b className={cls("text-white", "text-slate-800")}>+{SCORING.pensWinner}</b> · Pen exact: <b className={cls("text-white", "text-slate-800")}>+{SCORING.pensExact}</b></p>
+        <p className={cls("text-slate-400", "text-slate-500")}>Regulation — Exact: <b className={cls("text-white", "text-slate-800")}>{SCORING.exactReg}</b> · Goal diff: <b className={cls("text-white", "text-slate-800")}>{SCORING.gdReg}</b> · Outcome: <b className={cls("text-white", "text-slate-800")}>{SCORING.winner}</b></p>
+        <p className={cls("text-slate-400", "text-slate-500")}>Extra Time <i>(only if the match goes to ET)</i> — Exact: <b className={cls("text-white", "text-slate-800")}>+{SCORING.etExact}</b> · Goal diff: <b className={cls("text-white", "text-slate-800")}>+{SCORING.etGd}</b> · Outcome: <b className={cls("text-white", "text-slate-800")}>+{SCORING.etWinner}</b></p>
+        <p className={cls("text-slate-400", "text-slate-500")}>Penalties <i>(only if the match goes to pens)</i> — Winner pick: <b className={cls("text-white", "text-slate-800")}>+{SCORING.pensWinner}</b></p>
         <p className={cls("text-slate-400", "text-slate-500")}>Champion: <b className={cls("text-white", "text-slate-800")}>+{SCORING.champion}</b> · Finalists: <b className={cls("text-white", "text-slate-800")}>+{SCORING.finalists}</b></p>
         <p className={cls("text-slate-500", "text-slate-400") + " pt-1 border-t " + cls("border-slate-700", "border-slate-200")}>Tap a player to see their round breakdown.</p>
       </div>
@@ -1149,7 +1202,7 @@ function ResultsSection({ matches, results, saveResult }) {
   return (
     <div>
       <p className={cls("text-amber-200/70 border-amber-700/30 bg-slate-800/60", "text-amber-700 border-amber-200 bg-amber-50") + " text-xs mb-3 flex items-center gap-1.5 border rounded-lg p-2.5"}>
-        <Lock className="w-3.5 h-3.5 shrink-0" /> Enter results to auto-score all players.
+        <Lock className="w-3.5 h-3.5 shrink-0" /> Enter the regulation score. ET and penalty fields only appear when the score requires them — advancement is worked out automatically.
       </p>
       <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
         {ROUNDS.map(r => (
@@ -1250,27 +1303,22 @@ function AdminPicksSection({ matches, members, allPreds, savePredForPlayer }) {
 function AdminPickRow({ match, existingPred, onSave }) {
   const { cls } = useTheme();
   const now = Date.now();
-  const isLocked = now >= match.kickoff;
+  const isLockedReal = now >= match.kickoff;
   const [aReg, setAReg] = useState(existingPred?.aReg ?? "");
   const [bReg, setBReg] = useState(existingPred?.bReg ?? "");
-  const [advance, setAdvance] = useState(existingPred?.advance ?? "");
-  const [predET, setPredET] = useState(existingPred?.aET != null);
-  const [aET, setAET] = useState(existingPred?.aET ?? "");
-  const [bET, setBET] = useState(existingPred?.bET ?? "");
-  const [predPens, setPredPens] = useState(existingPred?.pensA != null);
-  const [pensA, setPensA] = useState(existingPred?.pensA ?? "");
-  const [pensB, setPensB] = useState(existingPred?.pensB ?? "");
+  const [etA, setEtA] = useState(existingPred?.etA ?? "");
+  const [etB, setEtB] = useState(existingPred?.etB ?? "");
+  const [pensWinner, setPensWinner] = useState(existingPred?.pensWinner ?? "");
   const [saved, setSaved] = useState(false);
 
-  const draw = aReg !== "" && bReg !== "" && Number(aReg) === Number(bReg);
-  const autoAdv = aReg !== "" && bReg !== "" && !draw ? (Number(aReg) > Number(bReg) ? match.teamA : match.teamB) : null;
-  const effAdv = advance || autoAdv || "";
+  const regOutcome = outcomeOf(aReg, bReg);
+  const etOutcome = outcomeOf(etA, etB);
 
   const save = async () => {
     if (aReg === "" || bReg === "") return;
-    const p = { aReg: Number(aReg), bReg: Number(bReg), advance: effAdv };
-    if (predET && aET !== "" && bET !== "") { p.aET = Number(aET); p.bET = Number(bET); }
-    if (predPens && pensA !== "" && pensB !== "") { p.pensA = Number(pensA); p.pensB = Number(pensB); }
+    const p = { aReg: Number(aReg), bReg: Number(bReg) };
+    if (etA !== "" && etB !== "") { p.etA = Number(etA); p.etB = Number(etB); }
+    if (pensWinner) p.pensWinner = pensWinner;
     await onSave(p);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -1286,41 +1334,37 @@ function AdminPickRow({ match, existingPred, onSave }) {
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-emerald-400">{match.id} · {match.venue}</span>
-          {isLocked && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">🔒 Locked</span>}
+          {isLockedReal && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">🔒 Locked</span>}
         </div>
         {existingPred ? <span className="text-[10px] text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />Has pick</span> : <span className="text-[10px] text-amber-400 font-bold">⚠ No pick</span>}
       </div>
-      <div className="flex items-center gap-2 mb-3">
+
+      <p className={cls("text-slate-400", "text-slate-500") + " text-[10px] font-bold mb-1"}>Regulation</p>
+      <div className="flex items-center gap-2 mb-1.5">
         <span className="flex-1 text-right text-xs font-bold">{FLAGS[match.teamA]} {match.teamA}</span>
         <NI val={aReg} set={setAReg} />
         <span className={cls("text-slate-500", "text-slate-400") + " font-bold"}>–</span>
         <NI val={bReg} set={setBReg} />
         <span className="flex-1 text-xs font-bold">{match.teamB} {FLAGS[match.teamB]}</span>
       </div>
+      <OutcomeBadges cls={cls} teamA={match.teamA} teamB={match.teamB} outcome={regOutcome} compact />
+
+      <p className={cls("text-slate-400", "text-slate-500") + " text-[10px] font-bold mt-3 mb-1.5"}>Extra Time (ET-only goals)</p>
+      <div className="flex items-center gap-2 mb-1.5 justify-center">
+        <NI val={etA} set={setEtA} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={etB} set={setEtB} />
+      </div>
+      <OutcomeBadges cls={cls} teamA={match.teamA} teamB={match.teamB} outcome={etOutcome} compact />
+
+      <p className={cls("text-slate-400", "text-slate-500") + " text-[10px] font-bold mt-3 mb-1.5"}>Penalty Winner</p>
       <div className="grid grid-cols-2 gap-1.5 mb-3">
         {[match.teamA, match.teamB].map(t => (
-          <button key={t} onClick={() => setAdvance(t)}
-            className={`py-1.5 rounded-lg text-xs font-bold transition ${effAdv === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>
+          <button key={t} onClick={() => setPensWinner(t)}
+            className={`py-1.5 rounded-lg text-xs font-bold transition ${pensWinner === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>
             {FLAGS[t]} {t}
           </button>
         ))}
       </div>
-      <div className={cls("border-slate-700/50", "border-slate-200") + " border-t pt-2 mb-2"}>
-        <label className="flex items-center gap-2 text-xs cursor-pointer mb-1.5">
-          <input type="checkbox" checked={predET} onChange={e => { setPredET(e.target.checked); if (!e.target.checked) { setAET(""); setBET(""); } }} />
-          <span className={cls("text-slate-400", "text-slate-500")}>ET score</span>
-          <span className="text-emerald-400 text-[10px] ml-auto">+5/+2</span>
-        </label>
-        {predET && <div className="flex items-center gap-2 pl-5"><NI val={aET} set={setAET} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={bET} set={setBET} /></div>}
-      </div>
-      <div className={cls("border-slate-700/50", "border-slate-200") + " border-t pt-2 mb-3"}>
-        <label className="flex items-center gap-2 text-xs cursor-pointer mb-1.5">
-          <input type="checkbox" checked={predPens} onChange={e => { setPredPens(e.target.checked); if (!e.target.checked) { setPensA(""); setPensB(""); } }} />
-          <span className={cls("text-slate-400", "text-slate-500")}>Penalty shootout</span>
-          <span className="text-emerald-400 text-[10px] ml-auto">+3/+3</span>
-        </label>
-        {predPens && <div className="flex items-center gap-2 pl-5"><NI val={pensA} set={setPensA} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={pensB} set={setPensB} /></div>}
-      </div>
+
       <button onClick={save} disabled={aReg === "" || bReg === ""}
         className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-1.5 rounded-lg text-xs font-bold text-white">
         {saved ? "✅ Saved!" : existingPred ? "Update Pick" : "Save Pick"}
@@ -1383,21 +1427,41 @@ function AdjustmentsSection({ members, adjustments, saveAdjustments }) {
 }
 
 // ── Result Row ─────────────────────────────────────────────
+// Admin enters the regulation score. If it's tied, ET fields appear automatically (regulation
+// ties always go to extra time). If ET is also tied, the penalty-winner picker appears (extra
+// time ties always go to penalties). "Who advances" is derived automatically from whichever
+// stage actually decided the match — no separate manual "advance" button needed.
 function ResultRow({ match, result, saveResult }) {
   const { cls } = useTheme();
   const [aReg, setAReg] = useState(result?.aReg ?? "");
   const [bReg, setBReg] = useState(result?.bReg ?? "");
-  const [hadET, setHadET] = useState(result?.hadET ?? false);
-  const [aET, setAET] = useState(result?.aET ?? "");
-  const [bET, setBET] = useState(result?.bET ?? "");
-  const [hadPens, setHadPens] = useState(result?.hadPens ?? false);
-  const [pensA, setPensA] = useState(result?.pensA ?? "");
-  const [pensB, setPensB] = useState(result?.pensB ?? "");
-  const [advance, setAdvance] = useState(result?.advance ?? "");
+  const [etA, setEtA] = useState(result?.etA ?? "");
+  const [etB, setEtB] = useState(result?.etB ?? "");
+  const [pensWinner, setPensWinner] = useState(result?.pensWinner ?? "");
+
+  const regTied = aReg !== "" && bReg !== "" && Number(aReg) === Number(bReg);
+  const needsET = regTied;
+  const etTied = needsET && etA !== "" && etB !== "" && Number(etA) === Number(etB);
+  const needsPens = needsET && etTied;
+
+  let advance = null;
+  if (aReg !== "" && bReg !== "" && !regTied) advance = Number(aReg) > Number(bReg) ? match.teamA : match.teamB;
+  else if (needsET && etA !== "" && etB !== "" && !etTied) advance = Number(etA) > Number(etB) ? match.teamA : match.teamB;
+  else if (needsPens && pensWinner) advance = pensWinner;
+
+  const canSave = aReg !== "" && bReg !== "" && !!advance;
 
   const save = () => {
-    if (aReg === "" || bReg === "" || !advance) return;
-    saveResult(match.id, { aReg: Number(aReg), bReg: Number(bReg), hadET, aET: hadET ? Number(aET) : null, bET: hadET ? Number(bET) : null, hadPens, pensA: hadPens ? Number(pensA) : null, pensB: hadPens ? Number(pensB) : null, advance });
+    if (!canSave) return;
+    saveResult(match.id, {
+      aReg: Number(aReg), bReg: Number(bReg),
+      hadET: needsET,
+      etA: needsET && etA !== "" ? Number(etA) : null,
+      etB: needsET && etB !== "" ? Number(etB) : null,
+      hadPens: needsPens,
+      pensWinner: needsPens ? pensWinner : null,
+      advance,
+    });
   };
 
   const NI = ({ val, set }) => (
@@ -1408,6 +1472,8 @@ function ResultRow({ match, result, saveResult }) {
   return (
     <div className={cls("bg-slate-800/60 border-slate-700", "bg-white border-slate-200 shadow-sm") + " border rounded-xl p-3"}>
       <p className="text-[11px] text-emerald-400 font-bold mb-2">{match.id} · {match.venue}</p>
+
+      <p className={cls("text-slate-400", "text-slate-500") + " text-[10px] font-bold mb-1"}>Regulation score</p>
       <div className="flex items-center gap-2 mb-3">
         <span className="flex-1 text-right font-bold text-sm">{FLAGS[match.teamA]} {match.teamA}</span>
         <NI val={aReg} set={setAReg} />
@@ -1415,21 +1481,35 @@ function ResultRow({ match, result, saveResult }) {
         <NI val={bReg} set={setBReg} />
         <span className="flex-1 font-bold text-sm">{match.teamB} {FLAGS[match.teamB]}</span>
       </div>
-      <div className="flex gap-4 mb-3 text-xs">
-        <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={hadET} onChange={e => setHadET(e.target.checked)} /> Extra time</label>
-        <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={hadPens} onChange={e => setHadPens(e.target.checked)} /> Penalties</label>
-      </div>
-      {hadET && <div className="flex items-center gap-2 mb-3 text-xs"><span className={cls("text-slate-400", "text-slate-500") + " w-16"}>ET score:</span><NI val={aET} set={setAET} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={bET} set={setBET} /></div>}
-      {hadPens && <div className="flex items-center gap-2 mb-3 text-xs"><span className={cls("text-slate-400", "text-slate-500") + " w-16"}>Pens:</span><NI val={pensA} set={setPensA} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={pensB} set={setPensB} /></div>}
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        {[match.teamA, match.teamB].map(t => (
-          <button key={t} onClick={() => setAdvance(t)}
-            className={`py-2 rounded-lg text-xs font-bold transition ${advance === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>
-            {FLAGS[t]} {t} advances
-          </button>
-        ))}
-      </div>
-      <button onClick={save} disabled={aReg === "" || bReg === "" || !advance}
+
+      {needsET && (
+        <>
+          <p className="text-[10px] text-amber-400 font-bold mb-1.5">⏱ Tied after 90' — enter goals scored in Extra Time</p>
+          <div className="flex items-center gap-2 mb-3 justify-center">
+            <NI val={etA} set={setEtA} /><span className={cls("text-slate-500", "text-slate-400")}>–</span><NI val={etB} set={setEtB} />
+          </div>
+        </>
+      )}
+
+      {needsPens && (
+        <>
+          <p className="text-[10px] text-amber-400 font-bold mb-1.5">🎯 Still tied after ET — pick the penalty shootout winner</p>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {[match.teamA, match.teamB].map(t => (
+              <button key={t} onClick={() => setPensWinner(t)}
+                className={`py-2 rounded-lg text-xs font-bold transition ${pensWinner === t ? "bg-emerald-500 text-white" : cls("bg-slate-900 border-slate-700", "bg-slate-100 border-slate-200") + " border"}`}>
+                {FLAGS[t]} {t}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {advance && (
+        <p className="text-xs text-emerald-400 font-bold mb-2 flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5" /> {FLAGS[advance]} {advance} advances</p>
+      )}
+
+      <button onClick={save} disabled={!canSave}
         className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-2 rounded-lg font-bold text-sm text-white">Save Result</button>
       {result && <p className="text-[11px] text-emerald-400 mt-2 flex items-center gap-1"><Check className="w-3 h-3" /> Saved</p>}
     </div>
