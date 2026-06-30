@@ -182,6 +182,18 @@ function useToast() {
   return [toast, show];
 }
 
+// Shown in place of a tab (Picks / Stats / Leaderboard) while everyone's predictions and
+// bonus picks are still being fetched, so it's never mistaken for "no data here."
+function TabLoading({ text }) {
+  const { cls } = useTheme();
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-3">
+      <div className={cls("border-slate-700 border-t-emerald-400", "border-slate-300 border-t-emerald-500") + " w-8 h-8 rounded-full border-2 animate-spin"} />
+      <p className={cls("text-slate-400", "text-slate-500") + " text-sm"}>{text}</p>
+    </div>
+  );
+}
+
 function fmtKickoff(ts) {
   return new Date(ts).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Etc/GMT+5" }) + " EST";
 }
@@ -458,6 +470,10 @@ function League({ code, me, back, tab, setTab, showToast }) {
   const [myBonus, setMyBonus] = useState(null);
   const [allPreds, setAllPreds] = useState({});
   const [allBonus, setAllBonus] = useState({});
+  // True only until the FIRST successful load of everyone's picks completes.
+  // Prevents the "everything looks wiped" flash: tabs that depend on allPreds/allBonus
+  // show a loading placeholder instead of rendering with empty data while this is true.
+  const [predsLoading, setPredsLoading] = useState(true);
   const [showCelebration, setShowCelebration] = useState(false);
   const isOwner = data?.owner === me;
 
@@ -466,15 +482,29 @@ function League({ code, me, back, tab, setTab, showToast }) {
       if (!snap.exists()) return;
       const d = snap.data();
       setData(d);
-      const ap = {}, ab = {};
-      for (const m of (d.members || [])) {
-        const ps = await getDoc(doc(db, "leagues", code, "predictions", m.name));
-        ap[m.name] = ps.exists() ? ps.data() : {};
-        const bs = await getDoc(doc(db, "leagues", code, "bonuses", m.name));
-        ab[m.name] = bs.exists() ? bs.data() : null;
+      try {
+        // Fetch every member's predictions + bonus doc IN PARALLEL (not one-by-one) —
+        // this is what was slow before, especially on mobile data during live matches.
+        const fetched = await Promise.all(
+          (d.members || []).map(async m => {
+            const [ps, bs] = await Promise.all([
+              getDoc(doc(db, "leagues", code, "predictions", m.name)),
+              getDoc(doc(db, "leagues", code, "bonuses", m.name)),
+            ]);
+            return { name: m.name, preds: ps.exists() ? ps.data() : {}, bonus: bs.exists() ? bs.data() : null };
+          })
+        );
+        const ap = {}, ab = {};
+        fetched.forEach(r => { ap[r.name] = r.preds; ab[r.name] = r.bonus; });
+        setAllPreds(ap);
+        setAllBonus(ab);
+      } catch (err) {
+        // If a fetch fails (network blip, permission hiccup), keep whatever was already
+        // loaded rather than wiping the screen to empty — that's the "looked wiped" bug.
+        console.error("Failed to load player picks:", err);
+      } finally {
+        setPredsLoading(false);
       }
-      setAllPreds(ap);
-      setAllBonus(ab);
       if (d.results?.M104 && !ls.get(`wc26:celebrated:${code}`)) setShowCelebration(true);
     });
     return () => unsub();
@@ -567,10 +597,10 @@ function League({ code, me, back, tab, setTab, showToast }) {
         ))}
       </div>
       {tab === "matches" && <MatchesTab matches={matches} myPreds={myPreds} savePred={savePred} myBonus={myBonus} saveBonus={saveBonusFn} members={members} allPreds={allPreds} />}
-      {tab === "picks" && <PicksTab matches={matches} results={results} members={members} allPreds={allPreds} comments={comments} addComment={addComment} me={me} />}
-      {tab === "stats" && <StatsTab me={me} members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} adjustments={adjustments} />}
+      {tab === "picks" && (predsLoading ? <TabLoading text="Loading everyone's picks…" /> : <PicksTab matches={matches} results={results} members={members} allPreds={allPreds} comments={comments} addComment={addComment} me={me} />)}
+      {tab === "stats" && (predsLoading ? <TabLoading text="Loading stats…" /> : <StatsTab me={me} members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} adjustments={adjustments} />)}
       {tab === "bracket" && <BracketTab matches={matches} results={results} />}
-      {tab === "board" && <Leaderboard members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} me={me} adjustments={adjustments} />}
+      {tab === "board" && (predsLoading ? <TabLoading text="Loading leaderboard…" /> : <Leaderboard members={members} allPreds={allPreds} allBonus={allBonus} matches={matches} results={results} me={me} adjustments={adjustments} />)}
       {tab === "admin" && isOwner && <AdminTab matches={matches} results={results} saveResult={saveResult} members={members} adjustments={adjustments} saveAdjustments={saveAdjustments} updateMatchTeams={updateMatchTeams} allPreds={allPreds} savePredForPlayer={savePredForPlayer} />}
     </div>
   );
