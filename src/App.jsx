@@ -63,6 +63,9 @@ const ALL_TEAMS = [
 ].sort();
 
 // ── Schedule ───────────────────────────────────────────────
+// NOTE: all kickoff values below are stored as UTC instants. They are converted to
+// Toronto local time for display by fmtKickoff() (see Utilities section), which uses
+// the real America/Toronto IANA timezone so it automatically accounts for EDT/EST.
 function buildInitialMatches() {
   const t = s => new Date(s).getTime();
   return [
@@ -74,11 +77,11 @@ function buildInitialMatches() {
     { id: "M78", round: "R32", slot: 5, teamA: "Ivory Coast", teamB: "Norway", kickoff: t("2026-06-30T17:00:00Z"), venue: "Dallas" },
     { id: "M79", round: "R32", slot: 6, teamA: "Mexico", teamB: "Ecuador", kickoff: t("2026-07-01T01:00:00Z"), venue: "Mexico City" },
     { id: "M80", round: "R32", slot: 7, teamA: "England", teamB: "DR Congo", kickoff: t("2026-07-01T16:00:00Z"), venue: "Atlanta" },
-    { id: "M81", round: "R32", slot: 8, teamA: "USA", teamB: "Bosnia & Herz.", kickoff: t("2026-07-01T21:00:00Z"), venue: "San Francisco" },
-    { id: "M82", round: "R32", slot: 9, teamA: "Belgium", teamB: "Senegal", kickoff: t("2026-07-01T17:00:00Z"), venue: "Seattle" },
+    { id: "M81", round: "R32", slot: 8, teamA: "USA", teamB: "Bosnia & Herz.", kickoff: t("2026-07-02T00:00:00Z"), venue: "San Francisco" },
+    { id: "M82", round: "R32", slot: 9, teamA: "Belgium", teamB: "Senegal", kickoff: t("2026-07-01T20:00:00Z"), venue: "Seattle" },
     { id: "M83", round: "R32", slot: 10, teamA: "Portugal", teamB: "Croatia", kickoff: t("2026-07-02T23:00:00Z"), venue: "Toronto" },
-    { id: "M84", round: "R32", slot: 11, teamA: "Spain", teamB: "Austria", kickoff: t("2026-07-02T16:00:00Z"), venue: "Los Angeles" },
-    { id: "M85", round: "R32", slot: 12, teamA: "Switzerland", teamB: "Algeria", kickoff: t("2026-07-03T00:00:00Z"), venue: "Vancouver" },
+    { id: "M84", round: "R32", slot: 11, teamA: "Spain", teamB: "Austria", kickoff: t("2026-07-02T19:00:00Z"), venue: "Los Angeles" },
+    { id: "M85", round: "R32", slot: 12, teamA: "Switzerland", teamB: "Algeria", kickoff: t("2026-07-03T03:00:00Z"), venue: "Vancouver" },
     { id: "M86", round: "R32", slot: 13, teamA: "Argentina", teamB: "Cape Verde", kickoff: t("2026-07-03T22:00:00Z"), venue: "Miami" },
     { id: "M87", round: "R32", slot: 14, teamA: "Colombia", teamB: "Ghana", kickoff: t("2026-07-04T01:30:00Z"), venue: "Kansas City" },
     { id: "M88", round: "R32", slot: 15, teamA: "Australia", teamB: "Egypt", kickoff: t("2026-07-03T18:00:00Z"), venue: "Dallas" },
@@ -194,8 +197,15 @@ function TabLoading({ text }) {
   );
 }
 
+// Formats a stored UTC timestamp as Toronto local time. Uses the real America/Toronto IANA
+// zone (not a fixed offset) so it automatically switches between EDT and EST as needed —
+// the whole tournament runs during Daylight Saving Time, so this will show "EDT".
 function fmtKickoff(ts) {
-  return new Date(ts).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Etc/GMT+5" }) + " EST";
+  return new Date(ts).toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit",
+    timeZone: "America/Toronto", timeZoneName: "short",
+  });
 }
 
 function Confetti() {
